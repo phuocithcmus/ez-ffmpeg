@@ -13,7 +13,6 @@
 </div>
 
 
-
 ## Overview
 
 **ez-ffmpeg** provides a simple, safe, and ergonomic interface for integrating FFmpeg into Rust projects. Designed to closely mirror FFmpeg's original logic and parameter structures, this library offers:
@@ -70,8 +69,8 @@ ez-ffmpeg = "*"
 Below is a basic example to get you started. Create or update your `main.rs` with the following code:
 
 ```rust
-use ez_ffmpeg::core::context::ffmpeg_context::FfmpegContext;
-use ez_ffmpeg::core::scheduler::ffmpeg_scheduler::FfmpegScheduler;
+use ez_ffmpeg::FfmpegContext;
+use ez_ffmpeg::FfmpegScheduler;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Build the FFmpeg context

@@ -46,8 +46,8 @@
 //!    if you enable the `"async"` feature) to run the job.
 //!
 //! ```rust
-//! use ez_ffmpeg::core::context::ffmpeg_context::FfmpegContext;
-//! use ez_ffmpeg::core::scheduler::ffmpeg_scheduler::FfmpegScheduler;
+//! use ez_ffmpeg::FfmpegContext;
+//! use ez_ffmpeg::FfmpegScheduler;
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     // 1. Build the FFmpeg context
