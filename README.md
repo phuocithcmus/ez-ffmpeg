@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/YeautyYE/ez-ffmpeg/blob/master/logo.jpg" alt="Logo" width="300">
+  <img src="https://raw.githubusercontent.com/YeautyYE/ez-ffmpeg/main/logo.jpg" alt="Logo" width="300">
 </p>
 
 <div align="center">
