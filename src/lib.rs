@@ -1,6 +1,6 @@
 //! # ez-ffmpeg
 //!
-//! **ez-ffmpeg** aims to provide a simpler, safer, and more ergonomic interface for using
+//! **ez-ffmpeg** aims to provide a simple, safe, and ergonomic interface for integrating
 //! [FFmpeg](https://ffmpeg.org) in Rust. By abstracting away much of the raw C API complexity,
 //! it lets you configure media pipelines, run transcoding or filtering jobs, and inspect streams
 //! with minimal overhead.
