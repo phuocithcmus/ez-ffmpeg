@@ -15,16 +15,16 @@
 
 ## Overview
 
-**ez-ffmpeg** provides a simple, safe, and ergonomic interface for integrating FFmpeg into Rust projects. Designed to closely mirror FFmpeg's original logic and parameter structures, this library offers:
+**`ez-ffmpeg`** provides a **safe and ergonomic Rust interface for FFmpeg integration**, offering a familiar API that closely follows FFmpeg’s original logic and parameter structures.
 
-- Complete safety without unsafe interfaces
-- Preservation of FFmpeg's core parameter and processing logic
-- Intuitive API for media processing
-- Supports custom Rust filters
-- Custom Inputs/Outputs
-- Optional RTMP and OpenGL support
+This library:
+- Ensures full safety without using `unsafe` code
+- Keeps the execution logic and parameter conventions as close to FFmpeg as possible
+- Provides an intuitive and user-friendly API for media processing
+- Supports custom Rust filters and flexible input/output handling
+- Offers optional RTMP and OpenGL integration
 
-The library abstracts away the complexity of the raw C API while maintaining the fundamental approach of FFmpeg, allowing developers to configure media pipelines, run transcoding or filtering jobs, and inspect streams with minimal overhead.
+By abstracting the complexity of the raw C API, `ez-ffmpeg` simplifies configuring media pipelines, performing transcoding and filtering, and inspecting media streams.
 
 ## Version Requirements
 
