@@ -1176,7 +1176,11 @@ unsafe fn open_output_file(index: usize, output: &mut Output) -> Result<Muxer> {
             (*out_fmt_ctx).flags |= AVFMT_FLAG_CUSTOM_IO;
         }
         Some(url) => {
-            let url_cstr = CString::new(url.as_str())?;
+            let url_cstr = if url == "-" {
+                CString::new("pipe:")?
+            } else {
+                CString::new(url.as_str())?
+            };
             let ret =
                 avformat_alloc_output_context2(&mut out_fmt_ctx, format, null(), url_cstr.as_ptr());
             if out_fmt_ctx.is_null() {
