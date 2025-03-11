@@ -12,10 +12,9 @@ use crate::core::context::output_filter::{
 use crate::core::context::{frame_alloc, type_to_linklabel, CodecContext};
 use crate::core::scheduler::ffmpeg_scheduler;
 use crate::core::scheduler::ffmpeg_scheduler::{FfmpegScheduler, Initialization};
+#[cfg(not(feature = "docs-rs"))]
 use crate::core::scheduler::filter_task::graph_opts_apply;
-use crate::error::Error::{
-    FileSameAsInput, FilterDescUtf8, FilterNameUtf8, FilterZeroOutputs, ParseInteger,
-};
+use crate::error::Error::{Bug, FileSameAsInput, FilterDescUtf8, FilterNameUtf8, FilterZeroOutputs, ParseInteger};
 use crate::error::FilterGraphParseError::{
     InvalidFileIndexInFg, InvalidFilterSpecifier, OutputUnconnected,
 };
@@ -26,12 +25,10 @@ use crate::error::{
 };
 use crate::error::{Error, Result};
 use crate::util::ffmpeg_utils::hashmap_to_avdictionary;
+#[cfg(not(feature = "docs-rs"))]
 use ffmpeg_sys_next::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC;
-use ffmpeg_sys_next::AVCodecConfig::{
-    AV_CODEC_CONFIG_CHANNEL_LAYOUT, AV_CODEC_CONFIG_COLOR_RANGE, AV_CODEC_CONFIG_COLOR_SPACE,
-    AV_CODEC_CONFIG_FRAME_RATE, AV_CODEC_CONFIG_PIX_FORMAT, AV_CODEC_CONFIG_SAMPLE_FORMAT,
-    AV_CODEC_CONFIG_SAMPLE_RATE,
-};
+#[cfg(not(feature = "docs-rs"))]
+use ffmpeg_sys_next::AVCodecConfig::*;
 use ffmpeg_sys_next::AVCodecID::{AV_CODEC_ID_AC3, AV_CODEC_ID_MP3, AV_CODEC_ID_NONE};
 use ffmpeg_sys_next::AVColorRange::AVCOL_RANGE_UNSPECIFIED;
 use ffmpeg_sys_next::AVColorSpace::AVCOL_SPC_UNSPECIFIED;
@@ -41,7 +38,9 @@ use ffmpeg_sys_next::AVMediaType::{
 };
 use ffmpeg_sys_next::AVPixelFormat::AV_PIX_FMT_NONE;
 use ffmpeg_sys_next::AVSampleFormat::AV_SAMPLE_FMT_NONE;
-use ffmpeg_sys_next::{av_add_q, av_channel_layout_copy, av_codec_get_id, av_codec_get_tag2, av_freep, av_get_exact_bits_per_sample, av_guess_codec, av_guess_format, av_guess_frame_rate, av_inv_q, av_malloc, av_packet_side_data_new, av_rescale_q, av_seek_frame, avcodec_alloc_context3, avcodec_descriptor_get_by_name, avcodec_find_encoder, avcodec_find_encoder_by_name, avcodec_get_name, avcodec_get_supported_config, avcodec_parameters_from_context, avcodec_parameters_to_context, avfilter_graph_alloc, avfilter_graph_free, avfilter_graph_segment_apply, avfilter_graph_segment_create_filters, avfilter_graph_segment_free, avfilter_graph_segment_parse, avfilter_inout_free, avfilter_pad_get_name, avfilter_pad_get_type, avformat_alloc_context, avformat_alloc_output_context2, avformat_close_input, avformat_find_stream_info, avformat_flush, avformat_free_context, avformat_open_input, avio_alloc_context, avio_context_free, avio_open, AVChannelLayout, AVChannelLayout__bindgen_ty_1, AVChannelOrder, AVCodec, AVCodecID, AVColorRange, AVColorSpace, AVFilterContext, AVFilterInOut, AVFilterPad, AVFormatContext, AVMediaType, AVOutputFormat, AVPixelFormat, AVRational, AVSampleFormat, AVStream, AVERROR_ENCODER_NOT_FOUND, AVFMT_FLAG_CUSTOM_IO, AVFMT_GLOBALHEADER, AVFMT_NOBINSEARCH, AVFMT_NOFILE, AVFMT_NOGENSEARCH, AVFMT_NOSTREAMS, AVIO_FLAG_WRITE, AVSEEK_FLAG_BACKWARD, AV_TIME_BASE};
+#[cfg(not(feature = "docs-rs"))]
+use ffmpeg_sys_next::{av_channel_layout_copy, av_packet_side_data_new, avcodec_get_supported_config, avfilter_graph_segment_apply, avfilter_graph_segment_create_filters, avfilter_graph_segment_free, avfilter_graph_segment_parse, AVChannelLayout, AVChannelLayout__bindgen_ty_1, AVChannelOrder};
+use ffmpeg_sys_next::{av_add_q, av_codec_get_id, av_codec_get_tag2, av_freep, av_get_exact_bits_per_sample, av_guess_codec, av_guess_format, av_guess_frame_rate, av_inv_q, av_malloc, av_rescale_q, av_seek_frame, avcodec_alloc_context3, avcodec_descriptor_get_by_name, avcodec_find_encoder, avcodec_find_encoder_by_name, avcodec_get_name, avcodec_parameters_from_context, avcodec_parameters_to_context, avfilter_graph_alloc, avfilter_graph_free, avfilter_inout_free, avfilter_pad_get_name, avfilter_pad_get_type, avformat_alloc_context, avformat_alloc_output_context2, avformat_close_input, avformat_find_stream_info, avformat_flush, avformat_free_context, avformat_open_input, avio_alloc_context, avio_context_free, avio_open, AVCodec, AVCodecID, AVColorRange, AVColorSpace, AVFilterContext, AVFilterInOut, AVFilterPad, AVFormatContext, AVMediaType, AVOutputFormat, AVPixelFormat, AVRational, AVSampleFormat, AVStream, AVERROR_ENCODER_NOT_FOUND, AVFMT_FLAG_CUSTOM_IO, AVFMT_GLOBALHEADER, AVFMT_NOBINSEARCH, AVFMT_NOFILE, AVFMT_NOGENSEARCH, AVFMT_NOSTREAMS, AVIO_FLAG_WRITE, AVSEEK_FLAG_BACKWARD, AV_TIME_BASE};
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::ffi::{c_uint, c_void, CStr, CString};
@@ -373,6 +372,19 @@ fn map_manual(
     Ok(())
 }
 
+#[cfg(feature = "docs-rs")]
+fn configure_output_filter_opts(
+    index: usize,
+    mux: &mut Muxer,
+    output_filter: &mut OutputFilter,
+    codec_id: AVCodecID,
+    enc: *const AVCodec,
+    output_stream_index: usize,
+) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(feature = "docs-rs"))]
 fn configure_output_filter_opts(
     index: usize,
     mux: &mut Muxer,
@@ -670,6 +682,21 @@ fn map_auto_streams(
     Ok(())
 }
 
+
+#[cfg(feature = "docs-rs")]
+unsafe fn map_auto_stream(
+    mux_index: usize,
+    mux: &mut Muxer,
+    demuxs: &mut Vec<Demuxer>,
+    oformat: *const AVOutputFormat,
+    media_type: AVMediaType,
+    filter_graphs: &mut Vec<FilterGraph>,
+    auto_disable: i32,
+) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn map_auto_stream(
     mux_index: usize,
     mux: &mut Muxer,
@@ -811,6 +838,16 @@ unsafe fn rescale_duration(src_duration: i64, src_time_base: AVRational, stream:
     (*stream).duration = av_rescale_q(src_duration, src_time_base, (*stream).time_base);
 }
 
+#[cfg(feature = "docs-rs")]
+fn streamcopy_init(
+    mux: &mut Muxer,
+    input_stream: *mut AVStream,
+    output_stream: *mut AVStream,
+) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(feature = "docs-rs"))]
 fn streamcopy_init(
     mux: &mut Muxer,
     input_stream: *mut AVStream,
@@ -1107,6 +1144,12 @@ unsafe fn free_output_av_format_context(muxs: Vec<Muxer>) {
     }
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn open_output_file(index: usize, output: &mut Output) -> Result<Muxer> {
+    Err(Bug)
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn open_output_file(index: usize, output: &mut Output) -> Result<Muxer> {
     let mut out_fmt_ctx = null_mut();
     let format = get_format(&output.format)?;
@@ -1546,6 +1589,17 @@ fn fg_complex_bind_input(
     ifilter_bind_ist(filter_graph, input_filter_index, stream_idx, demux)
 }
 
+#[cfg(feature = "docs-rs")]
+fn ifilter_bind_ist(
+    filter_graph: &mut FilterGraph,
+    input_index: usize,
+    stream_idx: usize,
+    demux: &mut Demuxer,
+) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(feature = "docs-rs"))]
 fn ifilter_bind_ist(
     filter_graph: &mut FilterGraph,
     input_index: usize,
@@ -1760,6 +1814,17 @@ fn init_filter_graphs(filter_complexs: Vec<FilterComplex>) -> Result<Vec<FilterG
     Ok(filter_graphs)
 }
 
+
+#[cfg(feature = "docs-rs")]
+fn init_filter_graph(
+    fg_index: usize,
+    filter_desc: &str,
+    hw_device: Option<String>,
+) -> Result<FilterGraph> {
+    Err(Bug)
+}
+
+#[cfg(not(feature = "docs-rs"))]
 fn init_filter_graph(
     fg_index: usize,
     filter_desc: &str,
@@ -1787,7 +1852,10 @@ fn init_filter_graph(
             return Err(FilterGraphParseError::from(ret).into());
         }
 
-        ret = graph_opts_apply(seg);
+        #[cfg(not(feature = "docs-rs"))]
+        {
+            ret = graph_opts_apply(seg);
+        }
         if ret < 0 {
             avfilter_graph_segment_free(&mut seg);
             avfilter_graph_free(&mut graph);
@@ -1953,6 +2021,15 @@ unsafe fn free_input_av_format_context(demuxs: Vec<Demuxer>) {
     }
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn open_input_file(
+    index: usize,
+    input: &mut Input,
+) -> Result<Demuxer> {
+    Err(Bug)
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn open_input_file(
     index: usize,
     input: &mut Input,

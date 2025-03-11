@@ -13,12 +13,14 @@ use ffmpeg_next::packet::{Mut, Ref};
 use ffmpeg_next::Packet;
 use ffmpeg_sys_next::AVMediaType::{AVMEDIA_TYPE_AUDIO, AVMEDIA_TYPE_VIDEO};
 use ffmpeg_sys_next::AVRounding::AV_ROUND_NEAR_INF;
+#[cfg(not(feature = "docs-rs"))]
+use ffmpeg_sys_next::AV_CODEC_PROP_FIELDS;
 use ffmpeg_sys_next::{
     av_compare_ts, av_gettime_relative, av_inv_q, av_mul_q, av_packet_ref, av_q2d, av_read_frame,
     av_rescale, av_rescale_q, av_rescale_q_rnd, av_stream_get_parser, av_usleep,
     avformat_seek_file, AVCodecDescriptor, AVCodecParameters, AVFormatContext, AVMediaType,
     AVPacket, AVRational, AVStream, AVERROR, AVERROR_EOF, AVERROR_INVALIDDATA, AVFMT_TS_DISCONT,
-    AV_CODEC_PROP_FIELDS, AV_NOPTS_VALUE, AV_PKT_FLAG_CORRUPT, AV_TIME_BASE, AV_TIME_BASE_Q,
+    AV_NOPTS_VALUE, AV_PKT_FLAG_CORRUPT, AV_TIME_BASE, AV_TIME_BASE_Q,
     EAGAIN,
 };
 use libc::{c_int, c_uint};
@@ -29,6 +31,20 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use crate::core::scheduler::input_controller::SchNode;
 
+#[cfg(feature = "docs-rs")]
+pub(crate) fn demux_init(
+    demux_idx: usize,
+    demux: &mut Demuxer,
+    independent_readrate: bool,
+    packet_pool: ObjPool<Packet>,
+    demux_node: Arc<SchNode>,
+    scheduler_status: Arc<AtomicUsize>,
+    scheduler_result: Arc<Mutex<Option<crate::error::Result<()>>>>,
+) -> crate::error::Result<()> {
+    Ok(())
+}
+
+#[cfg(not(feature = "docs-rs"))]
 pub(crate) fn demux_init(
     demux_idx: usize,
     demux: &mut Demuxer,
@@ -346,6 +362,14 @@ unsafe fn input_packet_process(
     0
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn ts_fixup(
+    demux_paramter: &mut DemuxerParamter,
+    in_fmt_ctx: *mut AVFormatContext,
+    pkt: *mut AVPacket,
+) {}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn ts_fixup(
     demux_paramter: &mut DemuxerParamter,
     in_fmt_ctx: *mut AVFormatContext,
@@ -458,6 +482,14 @@ unsafe fn ts_fixup(
     ist_dts_update(demux_paramter, ist, pkt);
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn ist_dts_update(
+    demux_paramter: &mut DemuxerParamter,
+    ist: *mut AVStream,
+    pkt: *mut AVPacket,
+) {}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn ist_dts_update(
     demux_paramter: &mut DemuxerParamter,
     ist: *mut AVStream,
@@ -535,6 +567,15 @@ unsafe fn ist_dts_update(
     // fd -> dts_est = ds.dts;
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn ts_discontinuity_process(
+    demux_paramter: &mut DemuxerParamter,
+    in_fmt_ctx: *mut AVFormatContext,
+    ist: *mut AVStream,
+    pkt: *mut AVPacket,
+) {}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn ts_discontinuity_process(
     demux_paramter: &mut DemuxerParamter,
     in_fmt_ctx: *mut AVFormatContext,
@@ -565,6 +606,15 @@ unsafe fn ts_discontinuity_process(
     }
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn ts_discontinuity_detect(
+    demux_paramter: &mut DemuxerParamter,
+    in_fmt_ctx: *mut AVFormatContext,
+    ist: *mut AVStream,
+    pkt: *mut AVPacket,
+) {}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn ts_discontinuity_detect(
     demux_paramter: &mut DemuxerParamter,
     in_fmt_ctx: *mut AVFormatContext,

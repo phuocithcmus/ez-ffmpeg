@@ -13,6 +13,7 @@ use crate::error::{Error, FilterGraphError, FilterGraphOperationError, FilterGra
 use crate::hwaccel::{hw_device_for_filter, init_filter_hw_device, HWDevice};
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use ffmpeg_next::Frame;
+#[cfg(not(feature = "docs-rs"))]
 use ffmpeg_sys_next::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC;
 use ffmpeg_sys_next::AVColorRange::AVCOL_RANGE_UNSPECIFIED;
 use ffmpeg_sys_next::AVColorSpace::AVCOL_SPC_UNSPECIFIED;
@@ -22,7 +23,9 @@ use ffmpeg_sys_next::AVOptionType::AV_OPT_TYPE_BINARY;
 use ffmpeg_sys_next::AVPixelFormat::AV_PIX_FMT_NONE;
 use ffmpeg_sys_next::AVRounding::{AV_ROUND_NEAR_INF, AV_ROUND_PASS_MINMAX};
 use ffmpeg_sys_next::AVSampleFormat::AV_SAMPLE_FMT_NONE;
-use ffmpeg_sys_next::{av_bprint_chars, av_bprint_finalize, av_bprint_init, av_bprintf, av_buffer_ref, av_buffer_replace, av_buffer_unref, av_buffersink_get_ch_layout, av_buffersink_get_color_range, av_buffersink_get_colorspace, av_buffersink_get_format, av_buffersink_get_frame_flags, av_buffersink_get_frame_rate, av_buffersink_get_h, av_buffersink_get_sample_aspect_ratio, av_buffersink_get_sample_rate, av_buffersink_get_time_base, av_buffersink_get_w, av_buffersrc_add_frame, av_buffersrc_add_frame_flags, av_buffersrc_close, av_buffersrc_get_nb_failed_requests, av_buffersrc_parameters_alloc, av_buffersrc_parameters_set, av_channel_layout_check, av_channel_layout_compare, av_channel_layout_copy, av_channel_layout_describe_bprint, av_channel_layout_uninit, av_color_range_name, av_color_space_name, av_dict_free, av_dict_iterate, av_frame_alloc, av_frame_free, av_frame_get_side_data, av_frame_ref, av_frame_remove_side_data, av_freep, av_get_pix_fmt_name, av_get_sample_fmt_name, av_inv_q, av_log2, av_malloc, av_opt_find, av_opt_set, av_opt_set_bin, av_opt_set_int, av_pix_fmt_desc_get, av_q2d, av_rescale_q, av_rescale_q_rnd, avfilter_get_by_name, avfilter_graph_alloc, avfilter_graph_config, avfilter_graph_create_filter, avfilter_graph_free, avfilter_graph_request_oldest, avfilter_graph_segment_apply, avfilter_graph_segment_create_filters, avfilter_graph_segment_free, avfilter_graph_segment_parse, avfilter_inout_free, avfilter_link, avfilter_pad_get_type, avio_close, avio_closep, avio_open, avio_open2, avio_read, avio_read_to_bprint, avio_size, AVBPrint, AVBufferRef, AVChannelLayout, AVChannelLayout__bindgen_ty_1, AVChannelOrder, AVColorRange, AVColorSpace, AVFilterContext, AVFilterGraph, AVFilterGraphSegment, AVFilterInOut, AVFrame, AVMediaType, AVPixelFormat, AVRational, AVSampleFormat, AVERROR, AVERROR_BUG, AVERROR_EOF, AVERROR_OPTION_NOT_FOUND, AVFILTER_FLAG_HWDEVICE, AVFILTER_FLAG_METADATA_ONLY, AVIO_FLAG_READ, AV_BPRINT_SIZE_AUTOMATIC, AV_BUFFERSINK_FLAG_NO_REQUEST, AV_BUFFERSRC_FLAG_PUSH, AV_FRAME_FLAG_KEY, AV_NOPTS_VALUE, AV_OPT_SEARCH_CHILDREN, AV_PIX_FMT_FLAG_HWACCEL, AV_TIME_BASE_Q, EAGAIN, EIO, ENOMEM};
+#[cfg(not(feature = "docs-rs"))]
+use ffmpeg_sys_next::{av_buffer_replace, av_buffersink_get_ch_layout, av_buffersink_get_color_range, av_buffersink_get_colorspace, av_buffersink_get_format, av_channel_layout_check, av_channel_layout_compare, av_channel_layout_copy, av_channel_layout_describe_bprint, av_channel_layout_uninit, av_dict_iterate, avfilter_graph_segment_apply, avfilter_graph_segment_create_filters, avfilter_graph_segment_free, avfilter_graph_segment_parse, AVChannelLayout, AVChannelLayout__bindgen_ty_1, AVChannelOrder, AVFilterGraphSegment, AVFILTER_FLAG_HWDEVICE, AVFILTER_FLAG_METADATA_ONLY, AV_FRAME_FLAG_KEY};
+use ffmpeg_sys_next::{av_bprint_chars, av_bprint_finalize, av_bprint_init, av_bprintf, av_buffer_ref, av_buffer_unref, av_buffersink_get_frame_flags, av_buffersink_get_frame_rate, av_buffersink_get_h, av_buffersink_get_sample_aspect_ratio, av_buffersink_get_sample_rate, av_buffersink_get_time_base, av_buffersink_get_w, av_buffersrc_add_frame, av_buffersrc_add_frame_flags, av_buffersrc_close, av_buffersrc_get_nb_failed_requests, av_buffersrc_parameters_alloc, av_buffersrc_parameters_set, av_color_range_name, av_color_space_name, av_dict_free, av_frame_alloc, av_frame_free, av_frame_get_side_data, av_frame_ref, av_frame_remove_side_data, av_freep, av_get_pix_fmt_name, av_get_sample_fmt_name, av_inv_q, av_log2, av_malloc, av_opt_find, av_opt_set, av_opt_set_bin, av_opt_set_int, av_pix_fmt_desc_get, av_q2d, av_rescale_q, av_rescale_q_rnd, avfilter_get_by_name, avfilter_graph_alloc, avfilter_graph_config, avfilter_graph_create_filter, avfilter_graph_free, avfilter_graph_request_oldest, avfilter_inout_free, avfilter_link, avfilter_pad_get_type, avio_close, avio_closep, avio_open, avio_open2, avio_read, avio_read_to_bprint, avio_size, AVBPrint, AVBufferRef, AVColorRange, AVColorSpace, AVFilterContext, AVFilterGraph, AVFilterInOut, AVFrame, AVMediaType, AVPixelFormat, AVRational, AVSampleFormat, AVERROR, AVERROR_BUG, AVERROR_EOF, AVERROR_OPTION_NOT_FOUND, AVIO_FLAG_READ, AV_BPRINT_SIZE_AUTOMATIC, AV_BUFFERSINK_FLAG_NO_REQUEST, AV_BUFFERSRC_FLAG_PUSH, AV_NOPTS_VALUE, AV_OPT_SEARCH_CHILDREN, AV_PIX_FMT_FLAG_HWACCEL, AV_TIME_BASE_Q, EAGAIN, EIO, ENOMEM};
 use log::{debug, error, info, trace, warn};
 use std::collections::VecDeque;
 use std::f64::consts::PI;
@@ -242,6 +245,7 @@ struct InputFilterParameter {
     color_space: AVColorSpace,
     color_range: AVColorRange,
     sample_rate: i32,
+    #[cfg(not(feature = "docs-rs"))]
     ch_layout: AVChannelLayout,
     displaymatrix_present: bool,
     displaymatrix_applied: bool,
@@ -274,6 +278,7 @@ impl InputFilterParameter {
             color_space: AVColorSpace::AVCOL_SPC_UNSPECIFIED,
             color_range: AVColorRange::AVCOL_RANGE_UNSPECIFIED,
             sample_rate: 0,
+            #[cfg(not(feature = "docs-rs"))]
             ch_layout: AVChannelLayout {
                 order: AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC,
                 nb_channels: 0,
@@ -362,6 +367,22 @@ impl OutputFilterParameter {
 unsafe impl Send for OutputFilterParameter {}
 unsafe impl Sync for OutputFilterParameter {}
 
+#[cfg(feature = "docs-rs")]
+unsafe fn fg_send_eof(
+    fg_index: usize,
+    graph: *mut *mut AVFilterGraph,
+    fgp: &mut FilterGraphParameter,
+    graph_desc: &str,
+    mut frame_box: FrameBox,
+    ifps: &mut Vec<InputFilterParameter>,
+    ofps: &mut Vec<OutputFilterParameter>,
+    input_filter_index: usize,
+    frame_pool: &ObjPool<Frame>,
+) -> crate::error::Result<()> {
+    Ok(())
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn fg_send_eof(
     fg_index: usize,
     graph: *mut *mut AVFilterGraph,
@@ -449,6 +470,22 @@ const VIDEO_CHANGED: i32 = 1 << 0;
 const AUDIO_CHANGED: i32 = 1 << 1;
 const MATRIX_CHANGED: i32 = 1 << 2;
 const HWACCEL_CHANGED: i32 = 1 << 3;
+#[cfg(feature = "docs-rs")]
+unsafe fn fg_send_frame(
+    fg_index: usize,
+    graph: *mut *mut AVFilterGraph,
+    fgp: &mut FilterGraphParameter,
+    graph_desc: &str,
+    mut frame_box: FrameBox,
+    ifps: &mut Vec<InputFilterParameter>,
+    ofps: &mut Vec<OutputFilterParameter>,
+    input_filter_index: usize,
+    frame_pool: &ObjPool<Frame>,
+) -> crate::error::Result<()> {
+    Ok(())
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn fg_send_frame(
     fg_index: usize,
     graph: *mut *mut AVFilterGraph,
@@ -631,6 +668,19 @@ unsafe fn fg_send_frame(
     Ok(())
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn configure_filtergraph(
+    fg_index: usize,
+    mut graph: *mut *mut AVFilterGraph,
+    fgp: &mut FilterGraphParameter,
+    graph_desc: &str,
+    ifps: &mut Vec<InputFilterParameter>,
+    ofps: &mut Vec<OutputFilterParameter>,
+) -> crate::error::Result<()> {
+    Ok(())
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn configure_filtergraph(
     fg_index: usize,
     mut graph: *mut *mut AVFilterGraph,
@@ -820,6 +870,7 @@ unsafe fn configure_filtergraph(
     Ok(())
 }
 
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn graph_is_meta(graph: *mut AVFilterGraph) -> bool {
     for i in 0..(*graph).nb_filters {
         unsafe {
@@ -862,6 +913,16 @@ unsafe fn configure_output_filter(
     }
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn configure_output_audio_filter(
+    graph: *mut AVFilterGraph,
+    ofp: &mut OutputFilterParameter,
+    output: *mut AVFilterInOut,
+) -> i32 {
+    0
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn configure_output_audio_filter(
     graph: *mut AVFilterGraph,
     ofp: &mut OutputFilterParameter,
@@ -1156,6 +1217,16 @@ fn choose_input(ifps: &Vec<InputFilterParameter>) -> usize {
     best_input as usize
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn fg_output_step(
+    fgp: &mut FilterGraphParameter,
+    ofp: &mut OutputFilterParameter,
+    frame_pool: &ObjPool<Frame>,
+) -> i32 {
+    0
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn fg_output_step(
     fgp: &mut FilterGraphParameter,
     ofp: &mut OutputFilterParameter,
@@ -1265,6 +1336,17 @@ unsafe fn choose_out_timebase(ofp: &mut OutputFilterParameter, frame: &Frame) {
     ofp.tb_out = tb;
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn fg_output_frame(
+    fgp: &mut FilterGraphParameter,
+    ofp: &mut OutputFilterParameter,
+    mut frame: Frame,
+    frame_pool: &ObjPool<Frame>,
+) -> i32 {
+    0
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn fg_output_frame(
     fgp: &mut FilterGraphParameter,
     ofp: &mut OutputFilterParameter,
@@ -1376,6 +1458,7 @@ unsafe fn fg_output_frame(
 
             if i == nb_frames_prev {
                 if !frame_is_null(&frame) {
+                    #[cfg(not(feature = "docs-rs"))]
                     (*frame.as_mut_ptr()).flags &= !AV_FRAME_FLAG_KEY;
                 }
             }
@@ -1397,6 +1480,16 @@ unsafe fn fg_output_frame(
     0
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn close_output(
+    ofp: &mut OutputFilterParameter,
+    fgp: &mut FilterGraphParameter,
+    frame_pool: &ObjPool<Frame>,
+) -> i32 {
+    0
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn close_output(
     ofp: &mut OutputFilterParameter,
     fgp: &mut FilterGraphParameter,
@@ -1481,6 +1574,15 @@ unsafe fn close_output(
     0
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn video_sync_process(
+    ofp: &mut OutputFilterParameter,
+    frame: *mut AVFrame,
+    nb_frames: &mut i64,
+    nb_frames_prev: &mut i64,
+) {}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn video_sync_process(
     ofp: &mut OutputFilterParameter,
     frame: *mut AVFrame,
@@ -1605,6 +1707,16 @@ unsafe fn video_sync_process(
     }
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn adjust_frame_pts_to_encoder_tb(
+    frame: *mut AVFrame,
+    tb_dst: AVRational,
+    start_time: i64,
+) -> f64 {
+    0.0
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn adjust_frame_pts_to_encoder_tb(
     frame: *mut AVFrame,
     tb_dst: AVRational,
@@ -1701,6 +1813,16 @@ impl Default for FPSConvContext {
     }
 }
 
+#[cfg(feature = "docs-rs")]
+fn ifilter_parameters_from_frame(
+    ifp: &mut InputFilterParameter,
+    frame: *const AVFrame,
+    media_type: AVMediaType,
+) -> crate::error::Result<()> {
+    Ok(())
+}
+
+#[cfg(not(feature = "docs-rs"))]
 fn ifilter_parameters_from_frame(
     ifp: &mut InputFilterParameter,
     frame: *const AVFrame,
@@ -1800,6 +1922,11 @@ fn choose_sample_fmts(
     }
 }
 
+
+#[cfg(feature = "docs-rs")]
+fn choose_sample_rates(bprint: &mut AVBPrint, rate: i32, rates: Option<Vec<i32>>) {}
+
+#[cfg(not(feature = "docs-rs"))]
 fn choose_sample_rates(bprint: &mut AVBPrint, rate: i32, rates: Option<Vec<i32>>) {
     if rate == 0 {
         if rates.is_none() || rates.as_ref().unwrap().is_empty() {
@@ -1827,6 +1954,7 @@ fn choose_sample_rates(bprint: &mut AVBPrint, rate: i32, rates: Option<Vec<i32>>
     }
 }
 
+#[cfg(not(feature = "docs-rs"))]
 fn choose_channel_layouts(
     bprint: &mut AVBPrint,
     layout: AVChannelLayout,
@@ -2106,6 +2234,17 @@ unsafe fn configure_input_filter(
     }
 }
 
+#[cfg(feature = "docs-rs")]
+unsafe fn configure_input_audio_filter(
+    fg_index: usize,
+    graph: *mut AVFilterGraph,
+    ifp: &mut InputFilterParameter,
+    input: *mut AVFilterInOut,
+) -> i32 {
+    0
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn configure_input_audio_filter(
     fg_index: usize,
     graph: *mut AVFilterGraph,
@@ -2427,6 +2566,19 @@ fn round(value: f64) -> f64 {
     value.round()
 }
 
+
+#[cfg(feature = "docs-rs")]
+unsafe fn graph_parse(
+    graph: *mut AVFilterGraph,
+    graph_desc: &str,
+    inputs: *mut *mut AVFilterInOut,
+    outputs: *mut *mut AVFilterInOut,
+    hw_device: Option<HWDevice>,
+) -> i32 {
+    0
+}
+
+#[cfg(not(feature = "docs-rs"))]
 unsafe fn graph_parse(
     graph: *mut AVFilterGraph,
     graph_desc: &str,
@@ -2476,6 +2628,7 @@ unsafe fn graph_parse(
     ret
 }
 
+#[cfg(not(feature = "docs-rs"))]
 pub(crate) unsafe fn graph_opts_apply(seg: *mut AVFilterGraphSegment) -> i32 {
     for i in 0..(*seg).nb_chains {
         let ch = *(*seg).chains.add(i);
