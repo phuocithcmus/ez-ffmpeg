@@ -41,24 +41,7 @@ use ffmpeg_sys_next::AVMediaType::{
 };
 use ffmpeg_sys_next::AVPixelFormat::AV_PIX_FMT_NONE;
 use ffmpeg_sys_next::AVSampleFormat::AV_SAMPLE_FMT_NONE;
-use ffmpeg_sys_next::{
-    av_add_q, av_channel_layout_copy, av_codec_get_id, av_codec_get_tag2, av_freep,
-    av_get_exact_bits_per_sample, av_guess_codec, av_guess_format, av_guess_frame_rate, av_inv_q,
-    av_malloc, av_packet_side_data_new, av_rescale_q, av_seek_frame, avcodec_alloc_context3,
-    avcodec_descriptor_get_by_name, avcodec_find_encoder, avcodec_find_encoder_by_name,
-    avcodec_get_name, avcodec_get_supported_config, avcodec_parameters_from_context,
-    avcodec_parameters_to_context, avfilter_graph_alloc, avfilter_graph_free,
-    avfilter_graph_segment_apply, avfilter_graph_segment_create_filters,
-    avfilter_graph_segment_free, avfilter_graph_segment_parse, avfilter_inout_free,
-    avfilter_pad_get_name, avfilter_pad_get_type, avformat_alloc_context,
-    avformat_alloc_output_context2, avformat_close_input, avformat_find_stream_info,
-    avformat_flush, avformat_free_context, avformat_open_input, avio_alloc_context,
-    avio_context_free, avio_open, AVChannelLayout, AVCodec, AVCodecID, AVColorRange, AVColorSpace,
-    AVFilterContext, AVFilterInOut, AVFilterPad, AVFormatContext, AVMediaType, AVOutputFormat,
-    AVPixelFormat, AVRational, AVSampleFormat, AVStream, AVERROR_ENCODER_NOT_FOUND,
-    AVFMT_FLAG_CUSTOM_IO, AVFMT_GLOBALHEADER, AVFMT_NOBINSEARCH, AVFMT_NOFILE, AVFMT_NOGENSEARCH,
-    AVFMT_NOSTREAMS, AVIO_FLAG_WRITE, AVSEEK_FLAG_BACKWARD, AV_TIME_BASE,
-};
+use ffmpeg_sys_next::{av_add_q, av_channel_layout_copy, av_codec_get_id, av_codec_get_tag2, av_freep, av_get_exact_bits_per_sample, av_guess_codec, av_guess_format, av_guess_frame_rate, av_inv_q, av_malloc, av_packet_side_data_new, av_rescale_q, av_seek_frame, avcodec_alloc_context3, avcodec_descriptor_get_by_name, avcodec_find_encoder, avcodec_find_encoder_by_name, avcodec_get_name, avcodec_get_supported_config, avcodec_parameters_from_context, avcodec_parameters_to_context, avfilter_graph_alloc, avfilter_graph_free, avfilter_graph_segment_apply, avfilter_graph_segment_create_filters, avfilter_graph_segment_free, avfilter_graph_segment_parse, avfilter_inout_free, avfilter_pad_get_name, avfilter_pad_get_type, avformat_alloc_context, avformat_alloc_output_context2, avformat_close_input, avformat_find_stream_info, avformat_flush, avformat_free_context, avformat_open_input, avio_alloc_context, avio_context_free, avio_open, AVChannelLayout, AVChannelLayout__bindgen_ty_1, AVChannelOrder, AVCodec, AVCodecID, AVColorRange, AVColorSpace, AVFilterContext, AVFilterInOut, AVFilterPad, AVFormatContext, AVMediaType, AVOutputFormat, AVPixelFormat, AVRational, AVSampleFormat, AVStream, AVERROR_ENCODER_NOT_FOUND, AVFMT_FLAG_CUSTOM_IO, AVFMT_GLOBALHEADER, AVFMT_NOBINSEARCH, AVFMT_NOFILE, AVFMT_NOGENSEARCH, AVFMT_NOSTREAMS, AVIO_FLAG_WRITE, AVSEEK_FLAG_BACKWARD, AV_TIME_BASE};
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::ffi::{c_uint, c_void, CStr, CString};
@@ -514,6 +497,9 @@ fn configure_output_filter_opts(
             let stream = &mux.get_streams()[output_stream_index];
             output_filter.opts.vsync_method = stream.vsync_method;
         } else {
+            if let Some(sample_fmt) = &mux.audio_sample_fmt {
+                output_filter.opts.audio_format = *sample_fmt;
+            }
             // audio formats
             let mut audio_formats: *const AVSampleFormat = null();
             let mut ret = avcodec_get_supported_config(
@@ -536,6 +522,10 @@ fn configure_output_filter_opts(
             }
             output_filter.opts.audio_formats = Some(audio_format_list);
 
+
+            if let Some(audio_sample_rate) = &mux.audio_sample_rate {
+                output_filter.opts.sample_rate = *audio_sample_rate;
+            }
             // sample_rates
             let mut rates: *const i32 = null();
             ret = avcodec_get_supported_config(
@@ -557,6 +547,10 @@ fn configure_output_filter_opts(
             }
             output_filter.opts.sample_rates = Some(rate_list);
 
+
+            if let Some(channels) = &mux.audio_channels {
+                output_filter.opts.ch_layout.nb_channels = *channels;
+            }
             // channel_layouts
             let mut layouts: *const AVChannelLayout = null();
             ret = avcodec_get_supported_config(
@@ -1236,6 +1230,9 @@ unsafe fn open_output_file(index: usize, output: &mut Output) -> Result<Muxer> {
         output.framerate,
         output.vsync_method,
         output.bits_per_raw_sample,
+        output.audio_sample_rate,
+        output.audio_channels,
+        output.audio_sample_fmt,
         output.max_video_frames,
         output.max_audio_frames,
         output.max_subtitle_frames,

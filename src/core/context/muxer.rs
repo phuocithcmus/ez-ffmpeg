@@ -5,10 +5,7 @@ use crate::core::context::output::{StreamMap, VSyncMethod};
 use crate::core::context::{FrameBox, PacketBox};
 use crate::error::OpenOutputError;
 use crossbeam_channel::{Receiver, Sender};
-use ffmpeg_sys_next::{
-    avformat_new_stream, AVCodec, AVCodecID, AVFormatContext, AVMediaType, AVRational, AVStream,
-    AVFMT_NOTIMESTAMPS, AVFMT_VARIABLE_FPS,
-};
+use ffmpeg_sys_next::{avformat_new_stream, AVCodec, AVCodecID, AVFormatContext, AVMediaType, AVRational, AVSampleFormat, AVStream, AVFMT_NOTIMESTAMPS, AVFMT_VARIABLE_FPS};
 use std::ffi::{CStr, CString};
 use std::ptr::null;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, AtomicUsize, Ordering};
@@ -32,6 +29,9 @@ pub(crate) struct Muxer {
     pub(crate) framerate: Option<AVRational>,
     pub(crate) vsync_method: Option<VSyncMethod>,
     pub(crate) bits_per_raw_sample: Option<i32>,
+    pub(crate) audio_sample_rate: Option<i32>,
+    pub(crate) audio_channels: Option<i32>,
+    pub(crate) audio_sample_fmt: Option<AVSampleFormat>,
 
     pub(crate) max_video_frames: Option<i64>,
     pub(crate) max_audio_frames: Option<i64>,
@@ -71,6 +71,9 @@ impl Muxer {
         framerate: Option<AVRational>,
         vsync_method: Option<VSyncMethod>,
         bits_per_raw_sample: Option<i32>,
+        audio_sample_rate: Option<i32>,
+        audio_channels: Option<i32>,
+        audio_sample_fmt: Option<AVSampleFormat>,
         max_video_frames: Option<i64>,
         max_audio_frames: Option<i64>,
         max_subtitle_frames: Option<i64>,
@@ -93,6 +96,9 @@ impl Muxer {
             framerate,
             vsync_method,
             bits_per_raw_sample,
+            audio_sample_rate,
+            audio_channels,
+            audio_sample_fmt,
             max_video_frames,
             max_audio_frames,
             max_subtitle_frames,

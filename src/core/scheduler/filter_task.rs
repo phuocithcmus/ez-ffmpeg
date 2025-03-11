@@ -912,21 +912,15 @@ unsafe fn configure_output_audio_filter(
     };
     av_bprint_init(&mut bprint, 0, u32::MAX);
 
-    //TODO To support specifying the following parameters
     choose_sample_fmts(
         &mut bprint,
-        AV_SAMPLE_FMT_NONE,
+        ofp.opts.audio_format,
         ofp.opts.audio_formats.clone(),
     );
-    choose_sample_rates(&mut bprint, 0, ofp.opts.sample_rates.clone());
+    choose_sample_rates(&mut bprint, ofp.opts.sample_rate, ofp.opts.sample_rates.clone());
     choose_channel_layouts(
         &mut bprint,
-        AVChannelLayout {
-            order: AV_CHANNEL_ORDER_UNSPEC,
-            nb_channels: 0,
-            u: AVChannelLayout__bindgen_ty_1 { mask: 0 },
-            opaque: null_mut(),
-        },
+        ofp.opts.ch_layout,
         ofp.opts.ch_layouts.clone(),
     );
 
@@ -1838,12 +1832,6 @@ fn choose_channel_layouts(
     layout: AVChannelLayout,
     layouts: Option<Vec<AVChannelLayout>>,
 ) {
-    if layout.order == AV_CHANNEL_ORDER_UNSPEC {
-        if layouts.is_none() || layouts.as_ref().unwrap().is_empty() {
-            return;
-        }
-    }
-
     unsafe {
         let ret = av_channel_layout_check(&layout as *const AVChannelLayout);
         if ret != 0 {

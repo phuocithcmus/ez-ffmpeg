@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::core::filter::frame_pipeline::FramePipeline;
 use crate::core::filter::frame_pipeline_builder::FramePipelineBuilder;
-use ffmpeg_sys_next::AVRational;
+use ffmpeg_sys_next::{AVRational, AVSampleFormat};
 
 unsafe impl Send for Output {}
 
@@ -196,6 +196,9 @@ pub struct Output {
     pub(crate) framerate: Option<AVRational>,
     pub(crate) vsync_method: Option<VSyncMethod>,
     pub(crate) bits_per_raw_sample: Option<i32>,
+    pub(crate) audio_sample_rate: Option<i32>,
+    pub(crate) audio_channels: Option<i32>,
+    pub(crate) audio_sample_fmt: Option<AVSampleFormat>,
 
     /// Maximum number of **video** frames to encode (equivalent to `-frames:v` in FFmpeg).
     ///
@@ -786,6 +789,78 @@ impl Output {
         self
     }
 
+    /// Sets the **audio sample rate** (in Hz) for output encoding.
+    ///
+    /// This method allows you to specify the desired audio sample rate for the output.
+    /// Common values include 44100 (CD quality), 48000 (standard for digital video),
+    /// and 22050 or 16000 (for lower bitrate applications).
+    ///
+    /// # Parameters
+    /// * `audio_sample_rate` - The sample rate in Hertz (e.g., 44100, 48000).
+    ///
+    /// # Returns
+    /// * `Self` - The modified `Output`, allowing method chaining.
+    ///
+    /// # Example
+    /// ```rust
+    /// let output = Output::from("output.mp4")
+    ///     .set_audio_sample_rate(48000); // Set to 48kHz
+    /// ```
+    pub fn set_audio_sample_rate(mut self, audio_sample_rate: i32) -> Self {
+        self.audio_sample_rate = Some(audio_sample_rate);
+        self
+    }
+
+    /// Sets the number of **audio channels** for output encoding.
+    ///
+    /// Common values include 1 (mono), 2 (stereo), 5.1 (6 channels), and 7.1 (8 channels).
+    /// This setting affects the spatial audio characteristics of the output.
+    ///
+    /// # Parameters
+    /// * `audio_channels` - The number of audio channels (e.g., 1 for mono, 2 for stereo).
+    ///
+    /// # Returns
+    /// * `Self` - The modified `Output`, allowing method chaining.
+    ///
+    /// # Example
+    /// ```rust
+    /// let output = Output::from("output.mp4")
+    ///     .set_audio_channels(2); // Set to stereo
+    /// ```
+    pub fn set_audio_channels(mut self, audio_channels: i32) -> Self {
+        self.audio_channels = Some(audio_channels);
+        self
+    }
+
+    /// Sets the **audio sample format** for output encoding.
+    ///
+    /// This method allows you to specify the audio sample format, which affects
+    /// how audio samples are represented. Common formats include:
+    /// - `AV_SAMPLE_FMT_S16` (signed 16-bit)
+    /// - `AV_SAMPLE_FMT_S32` (signed 32-bit)
+    /// - `AV_SAMPLE_FMT_FLT` (32-bit float)
+    /// - `AV_SAMPLE_FMT_FLTP` (32-bit float, planar)
+    ///
+    /// The format choice can impact quality, processing requirements, and compatibility.
+    ///
+    /// # Parameters
+    /// * `sample_fmt` - An `AVSampleFormat` enum value specifying the desired sample format.
+    ///
+    /// # Returns
+    /// * `Self` - The modified `Output`, allowing method chaining.
+    ///
+    /// # Example
+    /// ```rust
+    /// use ffmpeg_sys_next::AVSampleFormat::AV_SAMPLE_FMT_S16;
+    ///
+    /// let output = Output::from("output.mp4")
+    ///     .set_audio_sample_fmt(AV_SAMPLE_FMT_S16); // Set to signed 16-bit
+    /// ```
+    pub fn set_audio_sample_fmt(mut self, sample_fmt: AVSampleFormat) -> Self {
+        self.audio_sample_fmt = Some(sample_fmt);
+        self
+    }
+
     /// **Sets the maximum number of video frames to encode (`-frames:v`).**
     ///
     /// **Equivalent FFmpeg Command:**
@@ -893,15 +968,13 @@ impl Output {
     /// | Parameter | Description |
     /// |-----------|-------------|
     /// | `b=192k` | Bitrate (e.g., `128k` for 128 Kbps, `320k` for 320 Kbps) |
-    /// | `ar=44100` | Audio sample rate (e.g., `44100`, `48000`) |
-    /// | `ac=2` | Number of audio channels (e.g., `1` for mono, `2` for stereo) |
     /// | `compression_level=0-12` | Compression efficiency for formats like FLAC |
     ///
     /// **Example Usage:**
     /// ```rust
     /// let output = Output::from("some_url")
     ///     .set_audio_codec_opt("b", "320k")
-    ///     .set_audio_codec_opt("ar", "48000");
+    ///     .set_audio_codec_opt("compression_level", "6");
     /// ```
     pub fn set_audio_codec_opt(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         if let Some(ref mut opts) = self.audio_codec_opts {
@@ -921,7 +994,7 @@ impl Output {
     /// let output = Output::from("some_url")
     ///     .set_audio_codec_opts(vec![
     ///         ("b", "320k"),
-    ///         ("ar", "48000")
+    ///         ("compression_level", "6")
     ///     ]);
     /// ```
     pub fn set_audio_codec_opts(mut self, opts: Vec<(impl Into<String>, impl Into<String>)>) -> Self {
@@ -1063,6 +1136,9 @@ impl From<Box<dyn FnMut(&[u8]) -> i32>> for Output {
             framerate: None,
             vsync_method: None,
             bits_per_raw_sample: None,
+            audio_sample_rate: None,
+            audio_channels: None,
+            audio_sample_fmt: None,
             max_video_frames: None,
             max_audio_frames: None,
             max_subtitle_frames: None,
@@ -1092,6 +1168,9 @@ impl From<String> for Output {
             framerate: None,
             vsync_method: None,
             bits_per_raw_sample: None,
+            audio_sample_rate: None,
+            audio_channels: None,
+            audio_sample_fmt: None,
             max_video_frames: None,
             max_audio_frames: None,
             max_subtitle_frames: None,
