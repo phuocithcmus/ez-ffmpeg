@@ -1458,7 +1458,6 @@ unsafe fn fg_output_frame(
 
             if i == nb_frames_prev {
                 if !frame_is_null(&frame) {
-                    #[cfg(not(feature = "docs-rs"))]
                     (*frame.as_mut_ptr()).flags &= !AV_FRAME_FLAG_KEY;
                 }
             }
