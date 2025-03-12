@@ -6,7 +6,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/ez-ffmpeg.svg)](https://crates.io/crates/ez-ffmpeg)
 [![Documentation](https://img.shields.io/badge/docs.rs-ez--ffmpeg-blue)](https://docs.rs/ez-ffmpeg)
-[![License: WTFPL](https://img.shields.io/badge/License-WTFPL-brightgreen.svg)](https://github.com/YeautyYE/ez-ffmpeg/blob/master/LICENSE)
+[![License: MIT/Apache-2.0/MPL-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0%2FMPL--2.0-brightgreen.svg)](https://github.com/YeautyYE/ez-ffmpeg/blob/main/LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-%3E=1.80.0-orange)](https://www.rust-lang.org/)
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-%3E=7.0-blue)](https://ffmpeg.org)
 
@@ -29,7 +29,7 @@ By abstracting the complexity of the raw C API, `ez-ffmpeg` simplifies configuri
 ## Version Requirements
 
 - **Rust:** Version 1.80.0 or higher.
-- **FFmpeg:** Version 7.0 or higher. (Other FFmpeg versions have not been thoroughly tested and are not recommended.)
+- **FFmpeg:** Version 7.0 or higher. 
 
 ## Documentation
 
