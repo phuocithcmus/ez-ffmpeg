@@ -102,19 +102,21 @@ impl InputController {
         }
 
         // make sure to unchoke at least one source, if still available
-        for demux in self.demuxs.iter() {
-            let node = demux.as_ref();
-            let SchNode::Demux {
-                waiter,
-                task_exited,
-            } = node
-            else {
-                unreachable!()
-            };
-            if !task_exited.load(Ordering::Acquire) {
-                waiter.set_choked_next(false);
-                have_unchoked = true;
-                break;
+        if !have_unchoked {
+            for demux in self.demuxs.iter() {
+                let node = demux.as_ref();
+                let SchNode::Demux {
+                    waiter,
+                    task_exited,
+                } = node
+                else {
+                    unreachable!()
+                };
+                if !task_exited.load(Ordering::Acquire) {
+                    waiter.set_choked_next(false);
+                    // have_unchoked = true;
+                    break;
+                }
             }
         }
 
@@ -156,7 +158,7 @@ impl InputController {
             .filter_map(|mux_stream| {
                 let node = mux_stream.as_ref();
                 let SchNode::MuxStream {
-                    src,
+                    src: _,
                     last_dts,
                     source_finished,
                 } = node

@@ -5,7 +5,7 @@ use crate::core::filter::frame_pipeline_builder::FramePipelineBuilder;
 use crate::core::hwaccel::HWAccelID;
 use crate::core::scheduler::input_controller::SchNode;
 use crate::error::{DecoderError, OpenInputError};
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::Sender;
 use ffmpeg_sys_next::AVHWDeviceType::AV_HWDEVICE_TYPE_NONE;
 use ffmpeg_sys_next::AVMediaType::{AVMEDIA_TYPE_AUDIO, AVMEDIA_TYPE_SUBTITLE, AVMEDIA_TYPE_VIDEO};
 use ffmpeg_sys_next::AVPixelFormat::{
@@ -24,7 +24,6 @@ use std::ptr::null_mut;
 use std::sync::Arc;
 
 pub(crate) struct Demuxer {
-    pub(crate) index: usize,
     pub(crate) url: String,
     pub(crate) is_set_read_callback: bool,
     pub(crate) in_fmt_ctx: *mut AVFormatContext,
@@ -65,7 +64,7 @@ impl Demuxer {
         hwaccel_device: Option<String>,
         hwaccel_output_format: Option<String>,
     ) -> crate::error::Result<Self> {
-        let mut streams = Self::init_streams(
+        let streams = Self::init_streams(
             index,
             in_fmt_ctx,
             video_codec,
@@ -77,7 +76,6 @@ impl Demuxer {
         )?;
 
         Ok(Self {
-            index,
             url,
             is_set_read_callback,
             in_fmt_ctx,
@@ -150,7 +148,6 @@ impl Demuxer {
                     st,
                     codec_parameters,
                     codec_type,
-                    codec_id,
                     decoder.unwrap().as_ptr(),
                     codec_desc,
                     duration,

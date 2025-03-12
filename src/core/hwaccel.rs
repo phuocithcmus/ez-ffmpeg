@@ -88,7 +88,7 @@ unsafe impl Sync for HWDevice {}
 pub(crate) unsafe fn hw_device_free_all() {
     if let Some(dev) = FILTER_HW_DEVICE.get() {
         let mut dev_option = dev.lock().unwrap();
-        if let Some(mut dev) = dev_option.as_mut() {
+        if let Some(dev) = dev_option.as_mut() {
             if !dev.device_ref.is_null() {
                 av_buffer_unref(&mut dev.device_ref);
             }
@@ -98,7 +98,7 @@ pub(crate) unsafe fn hw_device_free_all() {
     if let Some(devices) = HW_DEVICES.get() {
         let mut devices = devices.lock().unwrap();
         if !devices.is_empty() {
-            for mut dev in devices.iter_mut() {
+            for dev in devices.iter_mut() {
                 if !dev.device_ref.is_null() {
                     av_buffer_unref(&mut dev.device_ref);
                 }
@@ -185,8 +185,6 @@ pub(crate) fn hw_device_get_by_type(device_type: AVHWDeviceType) -> Option<HWDev
 
 pub(crate) fn hw_device_init_from_string(arg: &str) -> (i32, Option<HWDevice>) {
     let mut device_ref = null_mut();
-    let mut name = None;
-    let mut err = 0;
 
     let k = arg
         .find(|c| c == ':' || c == '=' || c == '@')
@@ -203,11 +201,11 @@ pub(crate) fn hw_device_init_from_string(arg: &str) -> (i32, Option<HWDevice>) {
         return (AVERROR(EINVAL), None);
     }
 
-    if p.starts_with('=') {
+    let name = if p.starts_with('=') {
         let name_end = p[1..]
             .find(|c| c == ':' || c == '@' || c == ',')
             .unwrap_or(p.len() - 1);
-        name = Some(p[1..=name_end].to_string());
+        let name = Some(p[1..=name_end].to_string());
 
         if hw_device_get_by_name(&name.clone().unwrap()).is_some() {
             error!("Invalid device specification \"{arg}\": named device already exists");
@@ -216,13 +214,14 @@ pub(crate) fn hw_device_init_from_string(arg: &str) -> (i32, Option<HWDevice>) {
 
         let new_p_index = 1 + name_end;
         p = &p[new_p_index..];
+        name
     } else {
-        name = hw_device_default_name(device_type);
-    }
+        hw_device_default_name(device_type)
+    };
 
     if p.is_empty() {
         // New device with no parameters.
-        err =
+        let err =
             unsafe { av_hwdevice_ctx_create(&mut device_ref, device_type, null(), null_mut(), 0) };
         if err < 0 {
             error!("Device creation failed: {err}.");
@@ -249,7 +248,7 @@ pub(crate) fn hw_device_init_from_string(arg: &str) -> (i32, Option<HWDevice>) {
                 };
                 let eq_cstr = CString::new("=").unwrap();
                 let comma_cstr = CString::new(",").unwrap();
-                err = av_dict_parse_string(
+                let err = av_dict_parse_string(
                     &mut options,
                     v_cstr.as_ptr(),
                     eq_cstr.as_ptr(),
@@ -304,7 +303,7 @@ pub(crate) fn hw_device_init_from_string(arg: &str) -> (i32, Option<HWDevice>) {
             }
             return (AVERROR(EINVAL), None);
         };
-        err = unsafe {
+        let err = unsafe {
             av_hwdevice_ctx_create_derived(&mut device_ref, device_type, src_device.device_ref, 0)
         };
         if err < 0 {
@@ -320,14 +319,12 @@ pub(crate) fn hw_device_init_from_string(arg: &str) -> (i32, Option<HWDevice>) {
             let v = &p[1..];
             let Ok(v_cstr) = CString::new(v) else {
                 error!("Device creation failed: option:{v} can't convert to CString");
-                unsafe {
-                    av_buffer_unref(&mut device_ref);
-                }
+                av_buffer_unref(&mut device_ref);
                 return (AVERROR(EINVAL), None);
             };
             let eq_cstr = CString::new("=").unwrap();
             let comma_cstr = CString::new(",").unwrap();
-            err = av_dict_parse_string(
+            let mut err = av_dict_parse_string(
                 &mut options,
                 v_cstr.as_ptr(),
                 eq_cstr.as_ptr(),
@@ -336,9 +333,7 @@ pub(crate) fn hw_device_init_from_string(arg: &str) -> (i32, Option<HWDevice>) {
             );
             if err < 0 {
                 error!("Invalid device specification \"{arg}\": failed to parse options");
-                unsafe {
-                    av_buffer_unref(&mut device_ref);
-                }
+                av_buffer_unref(&mut device_ref);
                 return (AVERROR(EINVAL), None);
             }
             err = av_hwdevice_ctx_create(&mut device_ref, device_type, null(), options, 0);
@@ -374,7 +369,7 @@ pub(crate) fn hw_device_init_from_type(
 
     let mut device_ref = null_mut();
 
-    let mut err = match device {
+    let err = match device {
         None => unsafe {
             av_hwdevice_ctx_create(&mut device_ref, device_type, null(), null_mut(), 0)
         },

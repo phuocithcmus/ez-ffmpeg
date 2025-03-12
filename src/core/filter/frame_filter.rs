@@ -24,6 +24,7 @@ pub trait FrameFilter: Send {
     /// - `Ok(())` if initialization succeeds.
     /// - `Err(String)` if there is an error during initialization.
     fn init(&mut self, ctx: &FrameFilterContext) -> Result<(), String> {
+        log::debug!("Initializing filter:{}", ctx.name);
         Ok(())
     }
 
@@ -44,8 +45,8 @@ pub trait FrameFilter: Send {
     /// - `Err(String)` if there is an error during processing.
     fn filter_frame(
         &mut self,
-        frame: Frame,
-        ctx: &FrameFilterContext,
+        _frame: Frame,
+        _ctx: &FrameFilterContext,
     ) -> Result<Option<Frame>, String> {
         Ok(None)
     }
@@ -64,7 +65,7 @@ pub trait FrameFilter: Send {
     /// - `Ok(Some(frame))` if the filter produces a frame.
     /// - `Ok(None)` if no frame is produced.
     /// - `Err(String)` if there is an error during processing.
-    fn request_frame(&mut self, ctx: &FrameFilterContext) -> Result<Option<Frame>, String> {
+    fn request_frame(&mut self, _ctx: &FrameFilterContext) -> Result<Option<Frame>, String> {
         Ok(None)
     }
 
@@ -77,7 +78,9 @@ pub trait FrameFilter: Send {
     ///
     /// # Parameters
     /// - `ctx`: The context that provides metadata and dynamic modification capabilities.
-    fn uninit(&mut self, ctx: &FrameFilterContext) {}
+    fn uninit(&mut self, ctx: &FrameFilterContext) {
+        log::debug!("Uninitialized filter:{}", ctx.name);
+    }
 }
 
 
@@ -88,7 +91,7 @@ impl FrameFilter for NoopFilter {
         AVMediaType::AVMEDIA_TYPE_UNKNOWN
     }
 
-    fn filter_frame(&mut self, frame: Frame, ctx: &FrameFilterContext) -> Result<Option<Frame>, String> {
+    fn filter_frame(&mut self, frame: Frame, _ctx: &FrameFilterContext) -> Result<Option<Frame>, String> {
         Ok(Some(frame))
     }
 }

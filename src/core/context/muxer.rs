@@ -5,10 +5,10 @@ use crate::core::context::output::{StreamMap, VSyncMethod};
 use crate::core::context::{FrameBox, PacketBox};
 use crate::error::OpenOutputError;
 use crossbeam_channel::{Receiver, Sender};
-use ffmpeg_sys_next::{avformat_new_stream, AVCodec, AVCodecID, AVFormatContext, AVMediaType, AVRational, AVSampleFormat, AVStream, AVFMT_NOTIMESTAMPS, AVFMT_VARIABLE_FPS};
+use ffmpeg_sys_next::{avformat_new_stream, AVCodec, AVFormatContext, AVMediaType, AVRational, AVSampleFormat, AVStream, AVFMT_NOTIMESTAMPS, AVFMT_VARIABLE_FPS};
 use std::ffi::{CStr, CString};
 use std::ptr::null;
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use crate::core::scheduler::input_controller::SchNode;
 
@@ -120,7 +120,6 @@ impl Muxer {
     pub(crate) fn add_enc_stream(
         &mut self,
         media_type: AVMediaType,
-        codec_id: AVCodecID,
         enc: *const AVCodec,
         linklabel: Option<String>,
         src_node: Arc<SchNode>,
@@ -144,7 +143,6 @@ impl Muxer {
             linklabel,
             st,
             media_type,
-            codec_id,
             enc,
             vsync_method,
             frame_receiver,

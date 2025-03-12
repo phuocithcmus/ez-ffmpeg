@@ -1,10 +1,8 @@
-use crate::core::context::{null_frame, FrameBox};
-use crossbeam_channel::Receiver;
+use crate::core::context::null_frame;
 use ffmpeg_sys_next::{AVMediaType, AVRational};
 use ffmpeg_next::Frame;
 
 pub(crate) struct InputFilter {
-    pub(crate) index: usize,
     pub(crate) linklabel: String,
     pub(crate) media_type: AVMediaType,
     pub(crate) name: String,
@@ -12,9 +10,8 @@ pub(crate) struct InputFilter {
 }
 
 impl InputFilter {
-    pub(crate) fn new(index: usize, linklabel: String, media_type: AVMediaType, name: String, fallback: Frame) -> Self {
+    pub(crate) fn new(linklabel: String, media_type: AVMediaType, name: String, fallback: Frame) -> Self {
         Self {
-            index,
             linklabel,
             media_type,
             name,
@@ -24,8 +21,11 @@ impl InputFilter {
 }
 
 pub(crate) const IFILTER_FLAG_AUTOROTATE: u32 = 1 << 0;
+#[allow(dead_code)]
 pub(crate) const IFILTER_FLAG_REINIT: u32 = 1 << 1;
+#[allow(dead_code)]
 pub(crate) const IFILTER_FLAG_CFR: u32 = 1 << 2;
+#[allow(dead_code)]
 pub(crate) const IFILTER_FLAG_CROP: u32 = 1 << 3;
 
 pub(crate) struct InputFilterOptions {
@@ -34,9 +34,13 @@ pub(crate) struct InputFilterOptions {
     
     pub(crate) name: String,
     pub(crate) framerate: AVRational,
+    #[allow(dead_code)]
     pub(crate) crop_top: u32,
+    #[allow(dead_code)]
     pub(crate) crop_bottom: u32,
+    #[allow(dead_code)]
     pub(crate) crop_left: u32,
+    #[allow(dead_code)]
     pub(crate) crop_right: u32,
 
     pub(crate) sub2video_width: i32,

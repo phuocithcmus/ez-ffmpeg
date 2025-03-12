@@ -166,10 +166,9 @@ fn compare_codec_desc(
 }
 
 fn next_codec_for_id(id: AVCodecID, iter: *mut *mut c_void, encoder: i32) -> Codec {
-    let mut c = null();
     loop {
         unsafe {
-            c = av_codec_iterate(iter);
+            let c = av_codec_iterate(iter);
             if c.is_null() {
                 break;
             }

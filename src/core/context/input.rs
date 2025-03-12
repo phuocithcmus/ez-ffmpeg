@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use crate::core::filter::frame_pipeline::FramePipeline;
 use crate::core::filter::frame_pipeline_builder::FramePipelineBuilder;
 
 unsafe impl Send for Input {}
@@ -398,7 +397,7 @@ impl Input {
     ///
     /// This method clears any previously set pipelines and replaces them with the provided list.
     ///
-    /// **Note:** This method accepts [`FramePipelineBuilder`] instead of [`FramePipeline`].
+    /// **Note:** This method accepts [`FramePipelineBuilder`] instead of [`FramePipeline`](crate::core::filter::frame_pipeline::FramePipeline).
     /// For details on why [`FramePipelineBuilder`] is used, see its documentation.
     ///
     /// # Parameters
@@ -426,7 +425,7 @@ impl Input {
     /// If no pipelines are currently defined, this method creates a new pipeline list.
     /// Otherwise, it appends the provided pipeline to the existing transformations.
     ///
-    /// **Note:** This method accepts [`FramePipelineBuilder`] instead of [`FramePipeline`].
+    /// **Note:** This method accepts [`FramePipelineBuilder`] instead of [`FramePipeline`](crate::core::filter::frame_pipeline::FramePipeline).
     /// For details on why [`FramePipelineBuilder`] is used, see its documentation.
     ///
     /// # Parameters

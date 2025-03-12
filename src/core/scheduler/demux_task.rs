@@ -19,7 +19,7 @@ use ffmpeg_sys_next::{
     av_compare_ts, av_gettime_relative, av_inv_q, av_mul_q, av_packet_ref, av_q2d, av_read_frame,
     av_rescale, av_rescale_q, av_rescale_q_rnd, av_stream_get_parser, av_usleep,
     avformat_seek_file, AVCodecDescriptor, AVCodecParameters, AVFormatContext, AVMediaType,
-    AVPacket, AVRational, AVStream, AVERROR, AVERROR_EOF, AVERROR_INVALIDDATA, AVFMT_TS_DISCONT,
+    AVPacket, AVRational, AVStream, AVERROR, AVERROR_EOF, AVFMT_TS_DISCONT,
     AV_NOPTS_VALUE, AV_PKT_FLAG_CORRUPT, AV_TIME_BASE, AV_TIME_BASE_Q,
     EAGAIN,
 };
@@ -28,7 +28,6 @@ use log::{debug, error, info, warn};
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use crate::core::scheduler::input_controller::SchNode;
 
 #[cfg(feature = "docs-rs")]
@@ -75,7 +74,6 @@ pub(crate) fn demux_init(
         .name(format!("demuxer{demux_idx}:{format_name}"))
         .spawn(move || {
             let in_fmt_ctx_box = in_fmt_ctx_box;
-            let mut ret = 0;
             let mut is_started = false;
             demux_paramter.wallclock_start = unsafe { av_gettime_relative() };
 
@@ -90,7 +88,7 @@ pub(crate) fn demux_init(
                 };
 
                 unsafe {
-                    ret = av_read_frame(in_fmt_ctx_box.fmt_ctx, packet.as_mut_ptr());
+                    let mut ret = av_read_frame(in_fmt_ctx_box.fmt_ctx, packet.as_mut_ptr());
                     if ret == AVERROR(EAGAIN) {
                         if wait_until_not_paused(&scheduler_status) == STATUS_END {
                             info!("Demuxer receiver end command, finishing.");
@@ -172,7 +170,7 @@ pub(crate) fn demux_init(
                                 (*packet.as_ptr()).stream_index
                             );
                             packet_pool.release(packet);
-                            ret = AVERROR_INVALIDDATA;
+                            // ret = AVERROR_INVALIDDATA;
                             break;
                         } else {
                             warn!(
@@ -247,7 +245,7 @@ pub(crate) fn demux_init(
 
             let node = demux_node.as_ref();
             let SchNode::Demux {
-                waiter, task_exited
+                waiter: _, task_exited
             } = node else { unreachable!() };
             task_exited.store(true, Ordering::Release);
             debug!("Demuxer finished.");
@@ -261,7 +259,6 @@ pub(crate) fn demux_init(
 }
 
 fn demux_done(demux_paramter: &mut DemuxerParamter, packet_pool: &ObjPool<Packet>, scheduler_status: &Arc<AtomicUsize>) {
-    let mut ret = 0;
     for ds in &demux_paramter.demux_streams {
         for (i, (packet_dst, input_stream_index, output_stream_index)) in
             demux_paramter.dsts.iter().enumerate()
@@ -291,7 +288,7 @@ fn demux_done(demux_paramter: &mut DemuxerParamter, packet_pool: &ObjPool<Packet
                 },
             };
 
-            ret = unsafe {
+            let _ret = unsafe {
                 demux_stream_send_to_dst(
                     packet_box,
                     packet_dst,
@@ -305,10 +302,10 @@ fn demux_done(demux_paramter: &mut DemuxerParamter, packet_pool: &ObjPool<Packet
     }
 }
 
-const readrate_initial_burst: f32 = 0.5;
+const READRATE_INITIAL_BURST: f32 = 0.5;
 unsafe fn readrate_sleep(demux_paramter: &DemuxerParamter, nb_streams: c_uint, readrate: f32) {
     let file_start = 0;
-    let burst_until = (AV_TIME_BASE as f32 * readrate_initial_burst) as i64;
+    let burst_until = (AV_TIME_BASE as f32 * READRATE_INITIAL_BURST) as i64;
 
     for i in 0..nb_streams {
         let option = demux_paramter.demux_streams.get(i as usize);
@@ -331,7 +328,7 @@ unsafe fn readrate_sleep(demux_paramter: &DemuxerParamter, nb_streams: c_uint, r
 }
 
 //TODO copy_ts . default false
-const copy_ts: bool = false;
+const COPY_TS: bool = false;
 unsafe fn input_packet_process(
     demux_paramter: &mut DemuxerParamter,
     in_fmt_ctx: *mut AVFormatContext,
@@ -343,7 +340,7 @@ unsafe fn input_packet_process(
     if let Some(recording_time_us) = demux_paramter.recording_time_us.clone() {
         if recording_time_us != i64::MAX {
             let mut start_time = 0;
-            if copy_ts {
+            if COPY_TS {
                 start_time += demux_paramter.start_time_us.clone().unwrap_or(0);
             }
             let ds = demux_paramter
@@ -628,7 +625,7 @@ unsafe fn ts_discontinuity_detect(
 
     let fmt_is_discont = (*(*in_fmt_ctx).iformat).flags & AVFMT_TS_DISCONT;
 
-    let mut disable_discontinuity_correction = copy_ts;
+    let mut disable_discontinuity_correction = COPY_TS;
     let pkt_dts = av_rescale_q_rnd(
         (*pkt).dts,
         (*pkt).time_base,
@@ -636,7 +633,7 @@ unsafe fn ts_discontinuity_detect(
         AV_ROUND_NEAR_INF,
     );
 
-    if copy_ts && ds.next_dts != AV_NOPTS_VALUE && fmt_is_discont != 0 && (*ist).pts_wrap_bits < 60
+    if COPY_TS && ds.next_dts != AV_NOPTS_VALUE && fmt_is_discont != 0 && (*ist).pts_wrap_bits < 60
     {
         let wrap_dts = av_rescale_q_rnd(
             (*pkt).dts + (1i64 << (*ist).pts_wrap_bits),
@@ -648,11 +645,11 @@ unsafe fn ts_discontinuity_detect(
             disable_discontinuity_correction = false;
         }
     }
-    const dts_delta_threshold: i64 = 10;
+    const DTS_DELTA_THRESHOLD: i64 = 10;
     if ds.next_dts != AV_NOPTS_VALUE && !disable_discontinuity_correction {
         let mut delta = pkt_dts - ds.next_dts;
         if fmt_is_discont != 0 {
-            if delta.abs() > 1i64 * dts_delta_threshold * AV_TIME_BASE as i64
+            if delta.abs() > 1i64 * DTS_DELTA_THRESHOLD * AV_TIME_BASE as i64
                 || (pkt_dts + (AV_TIME_BASE / 10) as i64) < ds.dts
             {
                 (*demux_paramter).ts_offset_discont -= delta;
@@ -668,8 +665,8 @@ unsafe fn ts_discontinuity_detect(
                 }
             }
         } else {
-            const dts_error_threshold: i64 = 108000;
-            if delta.abs() > 1i64 * dts_error_threshold * AV_TIME_BASE as i64 {
+            const DTS_ERROR_THRESHOLD: i64 = 108000;
+            if delta.abs() > 1i64 * DTS_ERROR_THRESHOLD * AV_TIME_BASE as i64 {
                 warn!(
                     "DTS {}, next:{} st:{} invalid dropping",
                     (*pkt).dts,
@@ -681,7 +678,7 @@ unsafe fn ts_discontinuity_detect(
             if (*pkt).pts != AV_NOPTS_VALUE {
                 let pkt_pts = av_rescale_q((*pkt).pts, (*pkt).time_base, AV_TIME_BASE_Q);
                 delta = pkt_pts - ds.next_dts;
-                if delta.abs() > 1i64 * dts_error_threshold * AV_TIME_BASE as i64 {
+                if delta.abs() > 1i64 * DTS_ERROR_THRESHOLD * AV_TIME_BASE as i64 {
                     warn!(
                         "PTS {}, next:{} invalid dropping st:{}",
                         (*pkt).pts,
@@ -693,12 +690,12 @@ unsafe fn ts_discontinuity_detect(
             }
         }
     } else if ds.next_dts == AV_NOPTS_VALUE
-        && !copy_ts
+        && !COPY_TS
         && fmt_is_discont != 0
         && (*demux_paramter).last_ts != AV_NOPTS_VALUE
     {
         let delta = pkt_dts - (*demux_paramter).last_ts;
-        if delta.abs() > 1i64 * dts_delta_threshold * AV_TIME_BASE as i64 {
+        if delta.abs() > 1i64 * DTS_DELTA_THRESHOLD * AV_TIME_BASE as i64 {
             (*demux_paramter).ts_offset_discont -= delta;
             debug!(
                 "Inter stream timestamp discontinuity {}, new offset= {}",
@@ -784,7 +781,7 @@ unsafe impl Sync for DemuxerParamter {}
 impl DemuxerParamter {
     fn new(demux: &mut Demuxer) -> Self {
         let dsts = demux.take_dsts();
-        let mut dsts_finished = vec![false; dsts.len()];
+        let dsts_finished = vec![false; dsts.len()];
 
         let mut have_audio_dec = false;
         for (_packet_dst, input_stream_index, _output_stream_index) in &dsts {
@@ -938,7 +935,7 @@ unsafe fn demux_send_for_stream(
         .iter()
         .enumerate()
         .filter(
-            |(_i, (packet_dst, input_stream_index, output_stream_index))| {
+            |(_i, (_packet_dst, input_stream_index, _output_stream_index))| {
                 *input_stream_index == stream_index as usize
             },
         )
@@ -1010,7 +1007,7 @@ unsafe fn demux_stream_send_to_dst(
     mut packet_box: PacketBox,
     packet_dst: &Sender<PacketBox>,
     output_stream_index: &Option<usize>,
-    mut dst_finished: &mut bool,
+    dst_finished: &mut bool,
     flags: usize,
     scheduler_status: &Arc<AtomicUsize>
 ) -> i32 {

@@ -1,10 +1,10 @@
 use crate::core::filter::frame_filter::FrameFilter;
-use crate::core::filter::frame_pipeline::FramePipeline;
 use ffmpeg_sys_next::AVMediaType;
 use std::cell::RefCell;
 use std::rc::Rc;
+use crate::filter::frame_pipeline::FramePipeline;
 
-/// A builder for constructing [`FramePipeline`] instances.
+/// A builder for constructing [`FramePipeline`](crate::core::filter::frame_pipeline::FramePipeline) instances.
 ///
 /// ## No Public `build` Method – Users Should Not Call It Manually
 /// - `FramePipelineBuilder` does **not** expose a public `build` method.
@@ -197,7 +197,7 @@ impl FramePipelineBuilder {
         stream_index: usize,
         linklabel: Option<String>,
     ) -> Rc<RefCell<FramePipeline>> {
-        let mut frame_pipeline = FramePipeline::new(stream_index, linklabel, self.media_type);
+        let frame_pipeline = FramePipeline::new(stream_index, linklabel, self.media_type);
 
         for (name, filter) in self.filters.drain(..) {
             frame_pipeline.borrow_mut().add_last(&name, filter);

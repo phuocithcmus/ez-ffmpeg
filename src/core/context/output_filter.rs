@@ -49,14 +49,17 @@ pub(crate) const OFILTER_FLAG_AUTOSCALE: u32 = 1 << 2;
 pub(crate) struct OutputFilterOptions {
     pub(crate) name: String,
     pub(crate) enc: *const AVCodec,
+    #[allow(dead_code)]
     pub(crate) format: AVPixelFormat,
     pub(crate) formats: Option<Vec<AVPixelFormat>>,
     pub(crate) audio_format: AVSampleFormat,
     pub(crate) audio_formats: Option<Vec<AVSampleFormat>>,
     pub(crate) framerate: AVRational,
     pub(crate) framerates: Option<Vec<AVRational>>,
+    #[allow(dead_code)]
     pub(crate) color_space: AVColorSpace,
     pub(crate) color_spaces: Option<Vec<AVColorSpace>>,
+    #[allow(dead_code)]
     pub(crate) color_range: AVColorRange,
     pub(crate) color_ranges: Option<Vec<AVColorRange>>,
     pub(crate) vsync_method: Option<VSyncMethod>,

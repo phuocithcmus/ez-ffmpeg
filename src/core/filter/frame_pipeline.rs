@@ -21,7 +21,7 @@ impl FramePipeline {
         linklabel: Option<String>,
         media_type: AVMediaType,
     ) -> Rc<RefCell<FramePipeline>> {
-        let mut frame_pipeline = Rc::new(RefCell::new(Self {
+        let frame_pipeline = Rc::new(RefCell::new(Self {
             stream_index,
             linklabel,
             media_type,
@@ -37,6 +37,7 @@ impl FramePipeline {
     }
 
     pub fn add_first(&mut self, name: &str, filter: Box<dyn FrameFilter>) {
+        assert_eq!(self.media_type, filter.media_type());
         let context = Rc::new(RefCell::new(FrameFilterContext::new(
             name,
             filter,
@@ -53,6 +54,7 @@ impl FramePipeline {
     }
 
     pub fn add_last(&mut self, name: &str, filter: Box<dyn FrameFilter>) {
+        assert_eq!(self.media_type, filter.media_type());
         let context = Rc::new(RefCell::new(FrameFilterContext::new(
             name,
             filter,
@@ -74,6 +76,7 @@ impl FramePipeline {
         name: &str,
         filter: Box<dyn FrameFilter>,
     ) -> bool {
+        assert_eq!(self.media_type, filter.media_type());
         let mut current = self.head.clone();
         while let Some(node) = current {
             if node.borrow().name == base_name {
@@ -101,6 +104,7 @@ impl FramePipeline {
     }
 
     pub fn add_after(&mut self, base_name: &str, name: &str, filter: Box<dyn FrameFilter>) -> bool {
+        assert_eq!(self.media_type, filter.media_type());
         let mut current = self.head.clone();
         while let Some(node) = current {
             if node.borrow().name == base_name {
@@ -174,6 +178,7 @@ impl FramePipeline {
         new_name: &str,
         new_filter: Box<dyn FrameFilter>,
     ) -> Option<Box<dyn FrameFilter>> {
+        assert_eq!(self.media_type, new_filter.media_type());
         let mut current = self.head.clone();
         while let Some(node) = current {
             if node.borrow().name == old_name {

@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 use crate::core::context::output::VSyncMethod;
 use crate::core::context::{FrameBox, PacketBox, Stream};
 use crossbeam_channel::{Receiver, Sender};
-use ffmpeg_sys_next::{AVCodec, AVCodecID, AVMediaType, AVStream};
+use ffmpeg_sys_next::{AVCodec, AVMediaType, AVStream};
 
 #[derive(Clone)]
 pub(crate) struct EncoderStream {
@@ -11,7 +11,6 @@ pub(crate) struct EncoderStream {
     pub(crate) linklabel: Option<String>,
     pub(crate) stream: Stream,
     pub(crate) codec_type: AVMediaType,
-    pub(crate) codec_id: AVCodecID,
     pub(crate) encoder: *const AVCodec,
     pub(crate) vsync_method: Option<VSyncMethod>,
     src: Option<Receiver<FrameBox>>,
@@ -26,7 +25,6 @@ impl EncoderStream {
         linklabel: Option<String>,
         stream: *mut AVStream,
         codec_type: AVMediaType,
-        codec_id: AVCodecID,
         encoder: *const AVCodec,
         vsync_method: Option<VSyncMethod>,
         src: Receiver<FrameBox>,
@@ -39,7 +37,6 @@ impl EncoderStream {
             linklabel,
             stream: Stream { inner: stream },
             codec_type,
-            codec_id,
             encoder,
             vsync_method,
             src: Some(src),

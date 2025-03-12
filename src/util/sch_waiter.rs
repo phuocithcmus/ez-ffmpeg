@@ -1,4 +1,3 @@
-use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use ffmpeg_sys_next::av_gettime_relative;
@@ -40,6 +39,7 @@ impl SchWaiter {
     ///
     /// If `choked` is initially false, this function returns immediately. Otherwise, it
     /// acquires the lock, and waits on the condition variable until `choked` becomes false.
+    #[allow(dead_code)]
     pub(crate) fn wait(&self) {
         // early return
         if !self.choked.load(Ordering::Acquire) {

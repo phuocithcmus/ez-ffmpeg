@@ -47,6 +47,7 @@ impl<S: 'static> FfmpegScheduler<S> {
     /// # Returns
     /// - `true` if `S` and `T` are the same type.
     /// - `false` otherwise.
+    #[allow(dead_code)]
     fn is_state<T: 'static>(&self) -> bool {
         std::any::TypeId::of::<S>() == std::any::TypeId::of::<T>()
     }

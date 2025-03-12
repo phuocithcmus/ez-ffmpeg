@@ -14,7 +14,7 @@ use crate::core::scheduler::ffmpeg_scheduler;
 use crate::core::scheduler::ffmpeg_scheduler::{FfmpegScheduler, Initialization};
 #[cfg(not(feature = "docs-rs"))]
 use crate::core::scheduler::filter_task::graph_opts_apply;
-use crate::error::Error::{Bug, FileSameAsInput, FilterDescUtf8, FilterNameUtf8, FilterZeroOutputs, ParseInteger};
+use crate::error::Error::{FileSameAsInput, FilterDescUtf8, FilterNameUtf8, FilterZeroOutputs, ParseInteger};
 use crate::error::FilterGraphParseError::{
     InvalidFileIndexInFg, InvalidFilterSpecifier, OutputUnconnected,
 };
@@ -39,7 +39,7 @@ use ffmpeg_sys_next::AVMediaType::{
 use ffmpeg_sys_next::AVPixelFormat::AV_PIX_FMT_NONE;
 use ffmpeg_sys_next::AVSampleFormat::AV_SAMPLE_FMT_NONE;
 #[cfg(not(feature = "docs-rs"))]
-use ffmpeg_sys_next::{av_channel_layout_copy, av_packet_side_data_new, avcodec_get_supported_config, avfilter_graph_segment_apply, avfilter_graph_segment_create_filters, avfilter_graph_segment_free, avfilter_graph_segment_parse, AVChannelLayout, AVChannelLayout__bindgen_ty_1, AVChannelOrder};
+use ffmpeg_sys_next::{av_channel_layout_copy, av_packet_side_data_new, avcodec_get_supported_config, avfilter_graph_segment_apply, avfilter_graph_segment_create_filters, avfilter_graph_segment_free, avfilter_graph_segment_parse, AVChannelLayout};
 use ffmpeg_sys_next::{av_add_q, av_codec_get_id, av_codec_get_tag2, av_freep, av_get_exact_bits_per_sample, av_guess_codec, av_guess_format, av_guess_frame_rate, av_inv_q, av_malloc, av_rescale_q, av_seek_frame, avcodec_alloc_context3, avcodec_descriptor_get_by_name, avcodec_find_encoder, avcodec_find_encoder_by_name, avcodec_get_name, avcodec_parameters_from_context, avcodec_parameters_to_context, avfilter_graph_alloc, avfilter_graph_free, avfilter_inout_free, avfilter_pad_get_name, avfilter_pad_get_type, avformat_alloc_context, avformat_alloc_output_context2, avformat_close_input, avformat_find_stream_info, avformat_flush, avformat_free_context, avformat_open_input, avio_alloc_context, avio_context_free, avio_open, AVCodec, AVCodecID, AVColorRange, AVColorSpace, AVFilterContext, AVFilterInOut, AVFilterPad, AVFormatContext, AVMediaType, AVOutputFormat, AVPixelFormat, AVRational, AVSampleFormat, AVStream, AVERROR_ENCODER_NOT_FOUND, AVFMT_FLAG_CUSTOM_IO, AVFMT_GLOBALHEADER, AVFMT_NOBINSEARCH, AVFMT_NOFILE, AVFMT_NOGENSEARCH, AVFMT_NOSTREAMS, AVIO_FLAG_WRITE, AVSEEK_FLAG_BACKWARD, AV_TIME_BASE};
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
@@ -105,6 +105,7 @@ impl FfmpegContext {
         ffmpeg_scheduler.start()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn new(
         inputs: Vec<Input>,
         filter_complexs: Vec<FilterComplex>,
@@ -349,7 +350,6 @@ fn map_manual(
                 } else {
                     let (frame_sender, output_stream_index) = mux.add_enc_stream(
                         media_type,
-                        codec_id,
                         enc,
                         Some(stream_map.linklabel.clone()),
                         demux_node
@@ -754,7 +754,7 @@ unsafe fn map_auto_stream(
             } else {
                 let linklabel = type_to_linklabel(media_type, stream_index);
                 let (frame_sender, output_stream_index) =
-                    mux.add_enc_stream(media_type, codec_id, enc, linklabel, demux.node.clone())?;
+                    mux.add_enc_stream(media_type, enc, linklabel, demux.node.clone())?;
                 demux.get_stream_mut(stream_index).add_dst(frame_sender);
                 demux.connect_stream(stream_index);
                 let input_stream = demux.get_stream(stream_index);
@@ -1018,7 +1018,7 @@ fn ofilter_bind_ost(
 ) -> Result<()> {
     let output_filter = &mut filter_graph.outputs[output_filter_index];
     let (frame_sender, output_stream_index) =
-        mux.add_enc_stream(output_filter.media_type, codec_id, enc, linklabel, filter_graph.node.clone())?;
+        mux.add_enc_stream(output_filter.media_type, enc, linklabel, filter_graph.node.clone())?;
     output_filter.set_dst(frame_sender);
 
     configure_output_filter_opts(
@@ -1384,6 +1384,7 @@ struct InputOpaque {
     seek: Option<Box<dyn FnMut(i64, i32) -> i64>>,
 }
 
+#[allow(dead_code)]
 struct OutputOpaque {
     write: Box<dyn FnMut(&[u8]) -> i32>,
     seek: Option<Box<dyn FnMut(i64, i32) -> i64>>,
@@ -1483,7 +1484,7 @@ fn bind_fg_inputs_by_fg(filter_graphs: &mut Vec<FilterGraph>) -> Result<()> {
         .collect::<Vec<_>>();
 
     for (i, (inputs, _outputs)) in fg_labels.iter().enumerate() {
-        for (input_idx, input_filter_label) in inputs.iter().enumerate() {
+        for input_filter_label in inputs.iter() {
             if input_filter_label.linklabel.is_empty() {
                 continue;
             }
@@ -1693,10 +1694,6 @@ fn ifilter_bind_ist(
         demux.connect_stream(stream_idx);
         Ok(())
     }
-}
-
-fn av_rl32(data: *const u8) -> u32 {
-    unsafe { std::ptr::read_unaligned(data as *const u32).to_le() }
 }
 
 fn fg_find_input_idx_by_linklabel(
@@ -1928,7 +1925,7 @@ unsafe fn inouts_to_input_filters(
 
         let fallback = frame_alloc()?;
 
-        let mut filter = InputFilter::new(filter_index, linklabel.to_string(), media_type, name, fallback);
+        let mut filter = InputFilter::new(linklabel.to_string(), media_type, name, fallback);
         filter.opts.name = format!("fg:{fg_index}:{filter_index}");
         filterinouts.push(filter);
 

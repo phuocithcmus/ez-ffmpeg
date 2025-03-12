@@ -238,12 +238,13 @@ pub fn find_video_stream_info(url: &str) -> Result<Option<StreamInfo>> {
     let mut in_fmt_ctx = null_mut();
 
     let url_cstr = CString::new(url)?;
-    let mut ret = 0;
     unsafe {
         #[cfg(not(feature = "docs-rs"))]
-        {
-            ret = avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut());
-        }
+        let mut ret = {
+            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
+        };
+        #[cfg(feature = "docs-rs")]
+        let mut ret = 0;
         if ret < 0 {
             avformat_close_input(&mut in_fmt_ctx);
             return Err(OpenInputError::from(ret).into());
@@ -336,12 +337,13 @@ pub fn find_audio_stream_info(url: &str) -> Result<Option<StreamInfo>> {
     let mut in_fmt_ctx = null_mut();
 
     let url_cstr = CString::new(url)?;
-    let mut ret = 0;
     unsafe {
         #[cfg(not(feature = "docs-rs"))]
-        {
-            ret = avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut());
-        }
+        let mut ret = {
+            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
+        };
+        #[cfg(feature = "docs-rs")]
+        let mut ret = 0;
         if ret < 0 {
             avformat_close_input(&mut in_fmt_ctx);
             return Err(OpenInputError::from(ret).into());
@@ -428,12 +430,13 @@ pub fn find_subtitle_stream_info(url: &str) -> Result<Option<StreamInfo>> {
     let mut in_fmt_ctx = null_mut();
 
     let url_cstr = CString::new(url)?;
-    let mut ret = 0;
     unsafe {
         #[cfg(not(feature = "docs-rs"))]
-        {
-            ret = avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut());
-        }
+        let mut ret = {
+            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
+        };
+        #[cfg(feature = "docs-rs")]
+        let mut ret = 0;
         if ret < 0 {
             avformat_close_input(&mut in_fmt_ctx);
             return Err(OpenInputError::from(ret).into());
@@ -500,12 +503,13 @@ pub fn find_subtitle_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 pub fn find_data_stream_info(url: &str) -> Result<Option<StreamInfo>> {
     let mut in_fmt_ctx = null_mut();
     let url_cstr = CString::new(url)?;
-    let mut ret = 0;
     unsafe {
         #[cfg(not(feature = "docs-rs"))]
-        {
-            ret = avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut());
-        }
+        let mut ret = {
+            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
+        };
+        #[cfg(feature = "docs-rs")]
+        let mut ret = 0;
         if ret < 0 {
             avformat_close_input(&mut in_fmt_ctx);
             return Err(OpenInputError::from(ret).into());
@@ -561,12 +565,13 @@ pub fn find_data_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 pub fn find_attachment_stream_info(url: &str) -> Result<Option<StreamInfo>> {
     let mut in_fmt_ctx = null_mut();
     let url_cstr = CString::new(url)?;
-    let mut ret = 0;
     unsafe {
         #[cfg(not(feature = "docs-rs"))]
-        {
-            ret = avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut());
-        }
+        let mut ret = {
+            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
+        };
+        #[cfg(feature = "docs-rs")]
+        let mut ret = 0;
         if ret < 0 {
             avformat_close_input(&mut in_fmt_ctx);
             return Err(OpenInputError::from(ret).into());
@@ -624,12 +629,13 @@ pub fn find_attachment_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 pub fn find_unknown_stream_info(url: &str) -> Result<Option<StreamInfo>> {
     let mut in_fmt_ctx = null_mut();
     let url_cstr = CString::new(url)?;
-    let mut ret = 0;
     unsafe {
         #[cfg(not(feature = "docs-rs"))]
-        {
-            ret = avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut());
-        }
+        let mut ret = {
+            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
+        };
+        #[cfg(feature = "docs-rs")]
+        let mut ret = 0;
         if ret < 0 {
             avformat_close_input(&mut in_fmt_ctx);
             return Err(OpenInputError::from(ret).into());
@@ -678,12 +684,13 @@ pub fn find_unknown_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 pub fn find_all_stream_infos(url: &str) -> Result<Vec<StreamInfo>> {
     let mut in_fmt_ctx = null_mut();
     let url_cstr = CString::new(url)?;
-    let mut ret = 0;
     unsafe {
         #[cfg(not(feature = "docs-rs"))]
-        {
-            ret = avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut());
-        }
+        let mut ret = {
+            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
+        };
+        #[cfg(feature = "docs-rs")]
+        let mut ret = 0;
         if ret < 0 {
             avformat_close_input(&mut in_fmt_ctx);
             return Err(OpenInputError::from(ret).into());

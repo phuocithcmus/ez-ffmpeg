@@ -40,10 +40,12 @@ impl FrameFilterContext {
         self.frame_filter.clone()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn filter_ref(&self) -> Ref<Box<dyn FrameFilter>> {
         self.frame_filter.borrow()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn filter_mut(&mut self) -> RefMut<Box<dyn FrameFilter>> {
         self.frame_filter.borrow_mut()
     }

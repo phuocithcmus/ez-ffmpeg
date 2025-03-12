@@ -3,7 +3,7 @@ use crate::core::context::encoder_stream::EncoderStream;
 use crate::core::context::obj_pool::ObjPool;
 use crate::core::context::{FrameBox, FrameData};
 use crate::core::scheduler::type_to_symbol;
-use crate::error::Error::{FrameFilterDstFinished, FrameFilterInit, FrameFilterLinkLabelNoMatched, FrameFilterProcess, FrameFilterRequest, FrameFilterSendOOM, FrameFilterStreamTypeNoMatched, FrameFilterThreadExited, FrameFilterTypeNoMatched};
+use crate::error::Error::{FrameFilterInit, FrameFilterLinkLabelNoMatched, FrameFilterProcess, FrameFilterRequest, FrameFilterSendOOM, FrameFilterStreamTypeNoMatched, FrameFilterThreadExited, FrameFilterTypeNoMatched};
 use crate::filter::frame_filter_context::FrameFilterContext;
 use crate::filter::frame_pipeline::FramePipeline;
 use crate::filter::frame_pipeline_builder::FramePipelineBuilder;
@@ -509,63 +509,51 @@ fn do_filter_frame(
     frame_filter_context: &Rc<RefCell<FrameFilterContext>>,
     frame: Frame,
 ) -> crate::error::Result<(Option<Rc<RefCell<FrameFilterContext>>>, Option<Frame>)> {
-    let mut tmp_frame = None;
-    let next = {
-        let mut_frame_filter_context = frame_filter_context.borrow_mut();
-        let frame_filter = mut_frame_filter_context.filter();
-        let mut frame_filter = frame_filter.borrow_mut();
+    let mut_frame_filter_context = frame_filter_context.borrow_mut();
+    let frame_filter = mut_frame_filter_context.filter();
+    let mut frame_filter = frame_filter.borrow_mut();
 
-        let result = frame_filter.filter_frame(frame, mut_frame_filter_context.deref());
-        if let Err(e) = result {
-            error!(
-                "Pipeline [index:{} linklabel:{}] failed, during filter frame. error: {e}",
-                pipeline.borrow().stream_index,
-                pipeline
-                    .borrow()
-                    .linklabel
-                    .clone()
-                    .unwrap_or("".to_string())
-            );
-            return Err(FrameFilterProcess(e));
-        }
+    let result = frame_filter.filter_frame(frame, mut_frame_filter_context.deref());
+    if let Err(e) = result {
+        error!(
+            "Pipeline [index:{} linklabel:{}] failed, during filter frame. error: {e}",
+            pipeline.borrow().stream_index,
+            pipeline
+                .borrow()
+                .linklabel
+                .clone()
+                .unwrap_or("".to_string())
+        );
+        return Err(FrameFilterProcess(e));
+    }
 
-        tmp_frame = result.unwrap();
 
-        mut_frame_filter_context.next.clone()
-    };
-    Ok((next, tmp_frame))
+    Ok((mut_frame_filter_context.next.clone(), result.unwrap()))
 }
 
 fn do_request_frame(
     pipeline: &Rc<RefCell<FramePipeline>>,
     frame_filter_context: &Rc<RefCell<FrameFilterContext>>,
 ) -> crate::error::Result<(Option<Rc<RefCell<FrameFilterContext>>>, Option<Frame>)> {
-    let mut tmp_frame = None;
-    let next = {
-        let mut_frame_filter_context = frame_filter_context.borrow_mut();
-        let frame_filter = mut_frame_filter_context.filter();
-        let mut frame_filter = frame_filter.borrow_mut();
+    let mut_frame_filter_context = frame_filter_context.borrow_mut();
+    let frame_filter = mut_frame_filter_context.filter();
+    let mut frame_filter = frame_filter.borrow_mut();
 
-        let result = frame_filter.request_frame(mut_frame_filter_context.deref());
-        if let Err(e) = result {
-            error!(
-                "Pipeline [index:{} linklabel:{}] failed, during request frame.",
-                pipeline.borrow().stream_index,
-                pipeline
-                    .borrow()
-                    .linklabel
-                    .clone()
-                    .unwrap_or("".to_string())
-            );
-            return Err(FrameFilterRequest(e));
-        }
+    let result = frame_filter.request_frame(mut_frame_filter_context.deref());
+    if let Err(e) = result {
+        error!(
+            "Pipeline [index:{} linklabel:{}] failed, during request frame.",
+            pipeline.borrow().stream_index,
+            pipeline
+                .borrow()
+                .linklabel
+                .clone()
+                .unwrap_or("".to_string())
+        );
+        return Err(FrameFilterRequest(e));
+    }
 
-        tmp_frame = result.unwrap();
-
-        mut_frame_filter_context.next.clone()
-    };
-
-    Ok((next, tmp_frame))
+    Ok((mut_frame_filter_context.next.clone(), result.unwrap()))
 }
 
 fn pipeline_uninit(pipeline: &mut Rc<RefCell<FramePipeline>>) {

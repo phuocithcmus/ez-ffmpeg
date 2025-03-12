@@ -254,7 +254,7 @@ fn _mux_init(
                     packet_pool.release(packet_box.packet);
 
                     let mux_stream_node = mux_stream_node.as_ref();
-                    let SchNode::MuxStream { src, last_dts, source_finished } = mux_stream_node else { unreachable!() };
+                    let SchNode::MuxStream { src: _, last_dts: _, source_finished } = mux_stream_node else { unreachable!() };
                     source_finished.store(true, Ordering::Release);
                     input_controller.update_locked(&scheduler_status);
 
@@ -318,7 +318,7 @@ fn _mux_init(
 
         // write_trailer
         unsafe {
-            let mut ret = av_write_trailer(out_fmt_ctx_box.fmt_ctx);
+            let ret = av_write_trailer(out_fmt_ctx_box.fmt_ctx);
             if ret < 0 {
                 error!("Error writing trailer: {ret}");
                 set_scheduler_error(
@@ -350,7 +350,7 @@ unsafe fn update_last_dts(mux_stream_node: &Arc<SchNode>, input_controller: &Arc
     if (*pkt).dts != AV_NOPTS_VALUE {
         let dts = av_rescale_q((*pkt).dts + (*pkt).duration, (*pkt).time_base, AV_TIME_BASE_Q);
         let node = mux_stream_node.as_ref();
-        let SchNode::MuxStream { src, last_dts, source_finished } = node else { unreachable!() };
+        let SchNode::MuxStream { src: _, last_dts, source_finished: _ } = node else { unreachable!() };
         last_dts.store(dts, Ordering::Release);
         input_controller.update_locked(scheduler_status);
     }

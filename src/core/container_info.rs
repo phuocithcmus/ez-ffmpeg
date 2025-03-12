@@ -16,7 +16,7 @@ use ffmpeg_next::format;
 /// ```
 pub fn get_duration_us(input: &str) -> Result<i64, ffmpeg_next::Error> {
     // Open the media file using `format::input` and get the `FormatContext`
-    let mut format_context = format::input(input)?;
+    let format_context = format::input(input)?;
 
     // Get the duration of the media file in microseconds
     let duration = format_context.duration();

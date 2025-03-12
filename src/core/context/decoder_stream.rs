@@ -3,7 +3,7 @@ use crate::core::context::{FrameBox, PacketBox, Stream};
 use crate::core::hwaccel::HWAccelID;
 use crossbeam_channel::{Receiver, Sender};
 use ffmpeg_sys_next::{
-    AVCodec, AVCodecDescriptor, AVCodecID, AVCodecParameters, AVHWDeviceType, AVMediaType,
+    AVCodec, AVCodecDescriptor, AVCodecParameters, AVHWDeviceType, AVMediaType,
     AVPixelFormat, AVRational, AVStream,
 };
 
@@ -14,7 +14,6 @@ pub(crate) struct DecoderStream {
     pub(crate) stream: Stream,
     pub(crate) codec_parameters: *mut AVCodecParameters,
     pub(crate) codec_type: AVMediaType,
-    pub(crate) codec_id: AVCodecID,
     pub(crate) codec: Codec,
     pub(crate) codec_desc: *const AVCodecDescriptor,
     pub(crate) duration: i64,
@@ -40,7 +39,6 @@ impl DecoderStream {
         stream: *mut AVStream,
         codec_parameters: *mut AVCodecParameters,
         codec_type: AVMediaType,
-        codec_id: AVCodecID,
         codec: *const AVCodec,
         codec_desc: *const AVCodecDescriptor,
         duration: i64,
@@ -57,7 +55,6 @@ impl DecoderStream {
             stream: Stream { inner: stream },
             codec_parameters,
             codec_type,
-            codec_id,
             codec: Codec::new(codec),
             codec_desc,
             duration,

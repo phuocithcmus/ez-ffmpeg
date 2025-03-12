@@ -4,7 +4,6 @@ use crate::core::context::{null_frame, CodecContext, FrameBox, FrameData, Packet
 use crate::core::scheduler::ffmpeg_scheduler::{
     packet_is_null, set_scheduler_error, wait_until_not_paused, STATUS_END,
 };
-use crate::core::scheduler::type_to_symbol;
 use crate::error::DecodingOperationError::DecodeSubtitleError;
 use crate::error::Error::{Bug, Decoding, OpenDecoder};
 use crate::error::{
@@ -24,7 +23,7 @@ use ffmpeg_sys_next::AVRounding::AV_ROUND_UP;
 use ffmpeg_sys_next::AVSubtitleType::SUBTITLE_BITMAP;
 #[cfg(not(feature = "docs-rs"))]
 use ffmpeg_sys_next::{av_channel_layout_copy, AV_CODEC_FLAG_COPY_OPAQUE};
-use ffmpeg_sys_next::{av_buffer_create, av_buffer_ref, av_calloc, av_dict_set, av_frame_apply_cropping, av_frame_copy_props, av_frame_move_ref, av_frame_ref, av_frame_unref, av_free, av_freep, av_gcd, av_hwdevice_get_type_name, av_hwframe_transfer_data, av_inv_q, av_mallocz, av_memdup, av_mul_q, av_opt_set_dict2, av_pix_fmt_desc_get, av_rescale_delta, av_rescale_q, av_rescale_q_rnd, av_strdup, avcodec_alloc_context3, avcodec_decode_subtitle2, avcodec_default_get_buffer2, avcodec_descriptor_get, avcodec_find_decoder, avcodec_flush_buffers, avcodec_free_context, avcodec_get_hw_config, avcodec_open2, avcodec_parameters_to_context, avcodec_receive_frame, avcodec_send_packet, avsubtitle_free, AVBufferRef, AVCodec, AVCodecContext, AVDictionary, AVFrame, AVHWDeviceType, AVMediaType, AVPixelFormat, AVRational, AVSubtitle, AVSubtitleRect, AVERROR, AVERROR_EOF, AVPALETTE_SIZE, AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX, AV_FRAME_CROP_UNALIGNED, AV_FRAME_FLAG_CORRUPT, AV_NOPTS_VALUE, AV_PIX_FMT_FLAG_HWACCEL, AV_TIME_BASE_Q, EAGAIN, EINVAL, ENOMEM};
+use ffmpeg_sys_next::{av_buffer_create, av_buffer_ref, av_calloc, av_dict_set, av_frame_apply_cropping, av_frame_copy_props, av_frame_move_ref, av_frame_ref, av_frame_unref, av_free, av_freep, av_gcd, av_hwdevice_get_type_name, av_hwframe_transfer_data, av_inv_q, av_mallocz, av_memdup, av_mul_q, av_opt_set_dict2, av_pix_fmt_desc_get, av_rescale_delta, av_rescale_q, av_rescale_q_rnd, av_strdup, avcodec_alloc_context3, avcodec_decode_subtitle2, avcodec_default_get_buffer2, avcodec_flush_buffers, avcodec_free_context, avcodec_get_hw_config, avcodec_open2, avcodec_parameters_to_context, avcodec_receive_frame, avcodec_send_packet, avsubtitle_free, AVCodec, AVCodecContext, AVDictionary, AVFrame, AVHWDeviceType, AVMediaType, AVPixelFormat, AVRational, AVSubtitle, AVSubtitleRect, AVERROR, AVERROR_EOF, AVPALETTE_SIZE, AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX, AV_FRAME_CROP_UNALIGNED, AV_FRAME_FLAG_CORRUPT, AV_NOPTS_VALUE, AV_PIX_FMT_FLAG_HWACCEL, AV_TIME_BASE_Q, EAGAIN, EINVAL, ENOMEM};
 use log::{debug, error, info, trace, warn};
 use std::ffi::{c_void, CStr, CString};
 use std::ptr::{null, null_mut};
@@ -83,8 +82,8 @@ pub(crate) fn dec_init(
         ))
         .spawn(move || {
             let dp_arc = dp_arc;
-            let mut input_status = false;
-            let mut ret = 0;
+            let input_status = false;
+            let ret = 0;
             let mut err_exit = false;
 
             loop {
@@ -102,7 +101,7 @@ pub(crate) fn dec_init(
                 if let Err(e) = result {
                     if e == RecvTimeoutError::Disconnected {
                         debug!("Demuxer thread exit.");
-                        input_status = true;
+                        // input_status = true;
                         break;
                     }
                     continue;
@@ -194,7 +193,7 @@ pub(crate) fn dec_init(
                     }
 
                     let dp = dp_arc.clone();
-                    let mut dp = dp.lock().unwrap();
+                    let dp = dp.lock().unwrap();
                     let err_rate = if dp.dec.frames_decoded != 0 || dp.dec.decode_errors != 0 {
                         dp.dec.decode_errors as f64
                             / (dp.dec.frames_decoded + dp.dec.decode_errors) as f64
@@ -204,7 +203,7 @@ pub(crate) fn dec_init(
                     let max_error_rate = 2.0 / 3.0;
                     if err_rate > max_error_rate {
                         error!("Decoder error rate {err_rate} exceeds maximum {max_error_rate}");
-                        ret = FFMPEG_ERROR_RATE_EXCEEDED;
+                        // ret = FFMPEG_ERROR_RATE_EXCEEDED;
                     } else if err_rate != 0.0 {
                         debug!("Decoder error rate {err_rate}");
                     }
@@ -279,7 +278,7 @@ unsafe fn transcode_subtitles(
             == PacketOpaque::PktOpaqueFixSubDuration as i32
     {
         //TODO
-        let ret = fix_sub_duration_heartbeat(
+        let _ret = fix_sub_duration_heartbeat(
             dp_arc,
             av_rescale_q(
                 (*packet_box.packet.as_ptr()).pts,
@@ -391,9 +390,7 @@ fn subtitle_wrap_frame(
     copy: bool,
 ) -> crate::error::Result<()> {
     unsafe {
-        let mut buf: *mut AVBufferRef = null_mut();
         let mut sub: *mut AVSubtitle;
-        let mut ret: i32;
 
         if copy {
             sub = av_mallocz(size_of::<AVSubtitle>()) as *mut AVSubtitle;
@@ -403,7 +400,7 @@ fn subtitle_wrap_frame(
                 )));
             }
 
-            ret = copy_av_subtitle(sub, subtitle);
+            let ret = copy_av_subtitle(sub, subtitle);
             if ret < 0 {
                 av_freep(&mut sub as *mut _ as *mut c_void);
                 return Err(Decoding(DecodingOperationError::CopySubtitleError(
@@ -421,7 +418,7 @@ fn subtitle_wrap_frame(
             std::ptr::write(subtitle, std::mem::zeroed()); // Clear the source subtitle
         }
 
-        buf = av_buffer_create(
+        let buf = av_buffer_create(
             sub as *mut u8,
             std::mem::size_of::<AVSubtitle>(),
             Some(subtitle_free),
@@ -474,7 +471,7 @@ unsafe fn copy_av_subtitle(dst: *mut AVSubtitle, src: *const AVSubtitle) -> i32 
 
     for i in 0..(*src).num_rects as usize {
         let src_rect = *(*src).rects.add(i);
-        let mut dst_rect: *mut AVSubtitleRect =
+        let dst_rect: *mut AVSubtitleRect =
             av_mallocz(std::mem::size_of::<AVSubtitleRect>()) as *mut AVSubtitleRect;
         if dst_rect.is_null() {
             avsubtitle_free(&mut tmp);
@@ -536,7 +533,7 @@ unsafe fn copy_av_subtitle(dst: *mut AVSubtitle, src: *const AVSubtitle) -> i32 
     0 // Success
 }
 
-fn fix_sub_duration_heartbeat(dp_arc: Arc<Mutex<DecoderParameter>>, signal_pts: i64) -> i32 {
+fn fix_sub_duration_heartbeat(_dp_arc: Arc<Mutex<DecoderParameter>>, _signal_pts: i64) -> i32 {
     0
 }
 
@@ -768,7 +765,7 @@ fn dec_open(
 }
 
 fn hw_device_setup_for_decode(
-    mut dp: &mut MutexGuard<DecoderParameter>,
+    dp: &mut MutexGuard<DecoderParameter>,
     codec: *const AVCodec,
     dec_ctx: *mut AVCodecContext,
 ) -> i32 {
@@ -1068,10 +1065,10 @@ struct DecoderParameter {
 unsafe impl Send for DecoderParameter {}
 unsafe impl Sync for DecoderParameter {}
 
-struct ViewMap {
+/*struct ViewMap {
     id: i32,
     out_mask: i32,
-}
+}*/
 
 impl DecoderParameter {
     fn drop_opaque_ptr(&self) {
@@ -1080,7 +1077,7 @@ impl DecoderParameter {
             unsafe {
                 let dp_ptr = (*dec_ctx).opaque as *const Mutex<DecoderParameter>;
                 if !dp_ptr.is_null() {
-                    let dp_arc = Arc::from_raw(dp_ptr);
+                    let _dp_arc = Arc::from_raw(dp_ptr);
                 }
             }
         }
@@ -1120,6 +1117,7 @@ impl DecoderParameter {
 }
 
 struct Decoder {
+    #[allow(dead_code)]
     media_type: AVMediaType,
 
     subtitle_header_size: i32,
@@ -1140,19 +1138,21 @@ fn dec_done(dp_arc: &Arc<Mutex<DecoderParameter>>, senders: &Vec<Sender<FrameBox
     }
 }
 
-const fn fferrtag(a: u8, b: u8, c: u8, d: u8) -> i32 {
+/*const fn fferrtag(a: u8, b: u8, c: u8, d: u8) -> i32 {
     -(((a as i32) & 0xFF) << 24
         | ((b as i32) & 0xFF) << 16
         | ((c as i32) & 0xFF) << 8
         | ((d as i32) & 0xFF))
 }
 
-const FFMPEG_ERROR_RATE_EXCEEDED: i32 = fferrtag(b'E', b'R', b'E', b'D');
+const FFMPEG_ERROR_RATE_EXCEEDED: i32 = fferrtag(b'E', b'R', b'E', b'D');*/
 
 #[repr(i32)]
 enum FrameOpaque {
+    #[allow(dead_code)]
     FrameOpaqueSubHeartbeat = 1,
     FrameOpaqueEof,
+    #[allow(dead_code)]
     FrameOpaqueSendCommand,
 }
 
@@ -1160,7 +1160,7 @@ enum FrameOpaque {
 unsafe fn packet_decode(
     dp_arc: &Arc<Mutex<DecoderParameter>>,
     exit_on_error: bool,
-    mut packet_box: PacketBox,
+    packet_box: PacketBox,
     packet_pool: &ObjPool<Packet>,
     frame_pool: &ObjPool<Frame>,
     senders: &Vec<Sender<FrameBox>>,

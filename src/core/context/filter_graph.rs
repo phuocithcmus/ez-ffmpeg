@@ -33,10 +33,6 @@ impl FilterGraph {
         }
     }
 
-    pub(crate) fn has_src(&mut self) -> bool {
-        self.src.is_some()
-    }
-
     pub(crate) fn take_src(&mut self) -> Receiver<FrameBox> {
         let (_sender, receiver) = self.src.take().unwrap();
         receiver
