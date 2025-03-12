@@ -6,7 +6,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/ez-ffmpeg.svg)](https://crates.io/crates/ez-ffmpeg)
 [![Documentation](https://img.shields.io/badge/docs.rs-ez--ffmpeg-blue)](https://docs.rs/ez-ffmpeg)
-[![License: MIT/Apache-2.0/MPL-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0%2FMPL--2.0-brightgreen.svg)](https://github.com/YeautyYE/ez-ffmpeg/blob/main/LICENSE)
+[![License: MIT/Apache-2.0/MPL-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0%2FMPL--2.0-brightgreen.svg)](https://github.com/YeautyYE/ez-ffmpeg/blob/main/LICENSE-APACHE)
 [![Rust](https://img.shields.io/badge/Rust-%3E=1.80.0-orange)](https://www.rust-lang.org/)
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-%3E=7.0-blue)](https://ffmpeg.org)
 
@@ -104,5 +104,5 @@ More examples can be found [here][examples].
 
 ## License
 
-ez-ffmpeg is distributed under the WTFPL (Do What The F*ck You Want To Public License).
-**Important:** While ez-ffmpeg is freely usable, FFmpeg has its own licensing terms. Ensure your usage complies with FFmpeg's license when using its components.
+ez-ffmpeg is licensed under your choice of the MIT, Apache-2.0, or MPL-2.0 licenses. You may select the license that best fits your needs.
+**Important:** While ez-ffmpeg is freely usable, FFmpeg has its own licensing terms. Ensure that your use of its components complies with FFmpeg's license.
