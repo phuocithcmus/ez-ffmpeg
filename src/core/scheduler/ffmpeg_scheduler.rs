@@ -623,7 +623,7 @@ mod tests {
             .try_init();
 
         let mut input: Input = "test.mp4".into();
-        let mut output: Output = "output.jpg".into();
+        let output: Output = "output.jpg".into();
 
         input.hwaccel = Some("videotoolbox".to_string());
 

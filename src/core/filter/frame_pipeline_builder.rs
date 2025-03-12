@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use crate::filter::frame_pipeline::FramePipeline;
 
-/// A builder for constructing [`FramePipeline`](crate::core::filter::frame_pipeline::FramePipeline) instances.
+/// A builder for constructing [`FramePipeline`] instances.
 ///
 /// ## No Public `build` Method – Users Should Not Call It Manually
 /// - `FramePipelineBuilder` does **not** expose a public `build` method.

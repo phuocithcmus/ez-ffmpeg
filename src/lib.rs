@@ -11,7 +11,7 @@
 //!   and running FFmpeg pipelines. This includes:
 //!   - `Input` / `Output`: Descriptors for where media data comes from and goes to (files, URLs,
 //!     custom I/O callbacks, etc.).
-//!   - `FilterComplex` and [`FrameFilter`]: Mechanisms for applying FFmpeg filter graphs or
+//!   - `FilterComplex` and [`FrameFilter`](filter::frame_filter::FrameFilter): Mechanisms for applying FFmpeg filter graphs or
 //!     custom transformations.
 //!   - `container_info`: Utilities to extract information about the container, such as duration and format details.
 //!   - `stream_info`: Utilities to query media metadata (duration, codecs, etc.).
@@ -38,9 +38,9 @@
 //!
 //! For a simple pipeline, you typically do the following:
 //!
-//! 1. Build a [`FfmpegContext`] by specifying at least one [input](crate::core::context::input::Input)
-//!    and one [output](crate::core::context::output::Output). Optionally, add filter descriptions
-//!    (`filter_desc`) or attach [`FrameFilter`] pipelines at either the input (post-decode)
+//! 1. Build a [`FfmpegContext`] by specifying at least one [input](Input)
+//!    and one [output](Output). Optionally, add filter descriptions
+//!    (`filter_desc`) or attach [`FrameFilter`](filter::frame_filter::FrameFilter) pipelines at either the input (post-decode)
 //!    or the output (pre-encode) stage.
 //! 2. Create an [`FfmpegScheduler`] from that context, then call `start()` and `wait()` (or `.await`
 //!    if you enable the `"async"` feature) to run the job.

@@ -59,7 +59,7 @@ impl<S: 'static> EmbedRtmpServer<S> {
     }
 
     /// Checks whether the RTMP server has been stopped. This returns `true` after
-    /// [`stop`] has been called and the server has exited its main loop, otherwise `false`.
+    /// [`stop`](EmbedRtmpServer<Running>::stop) has been called and the server has exited its main loop, otherwise `false`.
     ///
     /// # Returns
     ///
@@ -72,7 +72,7 @@ impl<S: 'static> EmbedRtmpServer<S> {
 
 impl EmbedRtmpServer<Initialization> {
     /// Creates a new RTMP server instance that will listen on the specified address
-    /// when [`start`] is called.
+    /// when [`start`](EmbedRtmpServer<Initialization>::start) is called.
     ///
     /// # Parameters
     ///
@@ -267,7 +267,7 @@ impl EmbedRtmpServer<Running> {
     }
 
     /// Creates a sender channel for an RTMP stream, identified by `app_name` and `stream_key`.
-    /// This method is used internally by [`create_rtmp_input`] but can also be called directly
+    /// This method is used internally by [`create_rtmp_input`](EmbedRtmpServer<Running>::create_rtmp_input) but can also be called directly
     /// if you need more control over how the stream is handled.
     ///
     /// # Parameters

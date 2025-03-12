@@ -3,20 +3,20 @@
 //!
 //! - **Input & Output Handling** (in [`context`]): Structures and logic (`Input`, `Output`) for
 //!   specifying where media data originates and where it should be written.
-//! - **Filter Descriptions**: Define filter graphs with `FilterComplex` or attach custom [`FrameFilter`]
+//! - **Filter Descriptions**: Define filter graphs with `FilterComplex` or attach custom [`FrameFilter`](filter::frame_filter::FrameFilter)
 //!   implementations at the input/output stage.
 //! - **Stream and Device Queries** (in [`stream_info`] and [`device`]): Utilities for retrieving
 //!   information about media streams and available input devices.
 //! - **Hardware Acceleration** (in [`hwaccel`]): Enumerate/configure GPU-accelerated codecs (CUDA, VAAPI, etc.).
 //! - **Codec Discovery** (in [`codec`]): List encoders/decoders supported by FFmpeg.
-//! - **Custom Filters** (in [`filter`]): Implement user-defined [`FrameFilter`] logic for frames.
-//! - **Lifecycle Orchestration** (in [`scheduler`]): [`FfmpegScheduler`] that runs the configured pipeline
+//! - **Custom Filters** (in [`filter`]): Implement user-defined [`FrameFilter`](filter::frame_filter::FrameFilter) logic for frames.
+//! - **Lifecycle Orchestration** (in [`scheduler`]): [`FfmpegScheduler`](scheduler::ffmpeg_scheduler::FfmpegScheduler) that runs the configured pipeline
 //!   (synchronously or asynchronously if the `async` feature is enabled).
 //!
 //! # Submodules
 //!
-//! - [`context`]: Houses [`FfmpegContext`]—the central struct for assembling inputs, outputs, and filters.
-//! - [`scheduler`]: Defines [`FfmpegScheduler`], managing the execution of an `FfmpegContext` pipeline.
+//! - [`context`]: Houses [`FfmpegContext`](context::ffmpeg_context::FfmpegContext)—the central struct for assembling inputs, outputs, and filters.
+//! - [`scheduler`]: Defines [`FfmpegScheduler`](scheduler::ffmpeg_scheduler::FfmpegScheduler), managing the execution of an `FfmpegContext` pipeline.
 //! - [`container_info`]: Utilities to extract information about the container, such as duration and format details.
 //! - [`stream_info`]: Inspect media streams (e.g., find video/audio streams in a file).
 //! - [`device`]: Query audio/video input devices (cameras, microphones, etc.) on various platforms.
@@ -54,16 +54,16 @@
 //! ```
 
 /// The **context** module provides tools for assembling an entire FFmpeg pipeline,
-/// culminating in the [`FfmpegContext`]. This includes:
+/// culminating in the [`FfmpegContext`](context::ffmpeg_context::FfmpegContext). This includes:
 ///
-/// - **Inputs**: [`Input`] objects representing files, URLs, or custom I/O callbacks.
-/// - **Outputs**: [`Output`] objects representing target files, streams, or custom sinks.
+/// - **Inputs**: [`Input`](context::input::Input) objects representing files, URLs, or custom I/O callbacks.
+/// - **Outputs**: [`Output`](context::output::Output) objects representing target files, streams, or custom sinks.
 /// - **Filter Descriptions**: Simple inline filters via `filter_desc` or more complex
-///   [`FilterComplex`] graphs.
-/// - **Builders**: e.g., [`FfmpegContextBuilder`] for constructing a complete context
+///   [`FilterComplex`](context::filter_complex::FilterComplex) graphs.
+/// - **Builders**: e.g., [`FfmpegContextBuilder`](context::ffmpeg_context_builder::FfmpegContextBuilder) for constructing a complete context
 ///   with multiple inputs, outputs, and filter settings.
 ///
-/// Once you’ve built an [`FfmpegContext`], you can execute it via the [`FfmpegScheduler`].
+/// Once you’ve built an [`FfmpegContext`](context::ffmpeg_context::FfmpegContext), you can execute it via the [`FfmpegScheduler`](scheduler::ffmpeg_scheduler::FfmpegScheduler).
 ///
 /// # Example
 ///
@@ -79,10 +79,10 @@
 /// ```
 pub mod context;
 
-/// The **scheduler** module orchestrates the execution of a configured [`FfmpegContext`].
-/// It provides the [`FfmpegScheduler`] struct, which:
+/// The **scheduler** module orchestrates the execution of a configured [`FfmpegContext`](context::ffmpeg_context::FfmpegContext).
+/// It provides the [`FfmpegScheduler`](scheduler::ffmpeg_scheduler::FfmpegScheduler) struct, which:
 ///
-/// - **Starts** the FFmpeg pipeline via [`FfmpegScheduler::start()`].
+/// - **Starts** the FFmpeg pipeline via [`FfmpegScheduler::start()`](scheduler::ffmpeg_scheduler::FfmpegScheduler<crate::core::scheduler::ffmpeg_scheduler::Initialization>::start()).
 /// - **Manages** thread or subprocess creation, ensuring all streams and filters run.
 /// - **Waits** for completion (blocking or asynchronous, depending on whether the `async` feature is enabled).
 /// - **Returns** the final result, indicating success or failure.
@@ -236,8 +236,8 @@ pub mod device;
 ///
 /// # Public API
 ///
-/// - [`get_hwaccels()`]: Enumerates the hardware acceleration backends available on the
-///   current system, returning a list of [`HWAccelInfo`] items. Each item contains a
+/// - [`get_hwaccels()`](hwaccel::get_hwaccels): Enumerates the hardware acceleration backends available on the
+///   current system, returning a list of [`HWAccelInfo`](hwaccel::HWAccelInfo) items. Each item contains a
 ///   readable name (e.g., `"cuda"`, `"vaapi"`) and the corresponding `AVHWDeviceType`.
 ///
 /// # Example
@@ -252,7 +252,7 @@ pub mod device;
 ///
 /// # Notes
 ///
-/// - While only [`get_hwaccels()`] is directly exposed, internally the module contains
+/// - While only [`get_hwaccels()`](hwaccel::get_hwaccels) is directly exposed, internally the module contains
 ///   various helpers to initialize and manage hardware devices (e.g., `hw_device_init_from_string`).
 ///   These are used behind the scenes or in more advanced scenarios where explicit control
 ///   over device creation is required.
@@ -268,9 +268,9 @@ pub mod hwaccel;
 ///
 /// # Public API
 ///
-/// - [`get_encoders()`]: Returns a list of [`CodecInfo`] representing all
+/// - [`get_encoders()`](codec::get_encoders): Returns a list of [`CodecInfo`](codec::CodecInfo) representing all
 ///   encoders (e.g., H.264, AAC) recognized by FFmpeg.
-/// - [`get_decoders()`]: Returns a list of [`CodecInfo`] representing all
+/// - [`get_decoders()`](codec::get_decoders): Returns a list of [`CodecInfo`](codec::CodecInfo) representing all
 ///   decoders (e.g., H.264, AAC) recognized by FFmpeg.
 ///
 /// # Example
@@ -291,7 +291,7 @@ pub mod hwaccel;
 ///
 /// # Data Structures
 ///
-/// - [`CodecInfo`]: Contains user-friendly fields such as:
+/// - [`CodecInfo`](codec::CodecInfo): Contains user-friendly fields such as:
 ///   - `codec_name` / `codec_long_name`
 ///   - `desc_name`: The descriptor name from FFmpeg.
 ///   - `media_type` (audio/video/subtitle, etc.)
@@ -301,7 +301,7 @@ pub mod hwaccel;
 /// # Notes
 ///
 /// - The underlying [`Codec`] struct is for internal usage only, bridging to
-///   the raw FFmpeg APIs. In most cases, you only need the higher-level [`CodecInfo`]
+///   the raw FFmpeg APIs. In most cases, you only need the higher-level [`CodecInfo`](codec::CodecInfo)
 ///   data from the public functions above.
 /// - The available encoders/decoders can vary depending on your FFmpeg build
 ///   and any external libraries installed on the system.
@@ -309,7 +309,7 @@ pub mod codec;
 
 /// The **filter** module provides a flexible framework for custom frame processing
 /// within the FFmpeg pipeline, along with the ability to query FFmpeg's built-in filters.
-/// It introduces the [`FrameFilter`] trait, which defines how to apply transformations
+/// It introduces the [`FrameFilter`](filter::frame_filter::FrameFilter) trait, which defines how to apply transformations
 /// (e.g., scaling, color adjustments, GPU-accelerated effects) to decoded frames.
 /// You can attach these filters to either the input or the output side
 /// (depending on your desired pipeline design) so that frames are automatically
@@ -390,7 +390,7 @@ pub mod codec;
 /// ```
 ///
 /// In this example:
-/// 1. We define a **`FlipFilter`** that implements the [`FrameFilter`] trait and specifies
+/// 1. We define a **`FlipFilter`** that implements the [`FrameFilter`](filter::frame_filter::FrameFilter) trait and specifies
 ///    `AVMediaType::AVMEDIA_TYPE_VIDEO`.
 /// 2. We create a **`FramePipelineBuilder`** for `VIDEO` frames and add our filter to it.
 /// 3. We attach that pipeline to the **`Output`** configuration, so frames will be processed
@@ -405,12 +405,12 @@ pub mod codec;
 ///
 /// # Trait Overview
 ///
-/// The [`FrameFilter`] trait exposes several methods you can override:
-/// - [`FrameFilter::media_type()`]: Indicates which media type (video, audio, etc.) this filter handles.
-/// - [`FrameFilter::init()`]: Called once when the filter is first created (e.g., allocate resources).
-/// - [`FrameFilter::filter_frame()`]: The primary method for transforming an incoming frame.
-/// - [`FrameFilter::request_frame()`]: If your filter generates frames on its own, you can override this.
-/// - [`FrameFilter::uninit()`]: Called during cleanup when the filter is removed or the pipeline ends.
+/// The [`FrameFilter`](filter::frame_filter::FrameFilter) trait exposes several methods you can override:
+/// - [`FrameFilter::media_type()`](filter::frame_filter::FrameFilter::media_type): Indicates which media type (video, audio, etc.) this filter handles.
+/// - [`FrameFilter::init()`](filter::frame_filter::FrameFilter::init): Called once when the filter is first created (e.g., allocate resources).
+/// - [`FrameFilter::filter_frame()`](filter::frame_filter::FrameFilter::filter_frame): The primary method for transforming an incoming frame.
+/// - [`FrameFilter::request_frame()`](filter::frame_filter::FrameFilter::request_frame): If your filter generates frames on its own, you can override this.
+/// - [`FrameFilter::uninit()`](filter::frame_filter::FrameFilter::uninit): Called during cleanup when the filter is removed or the pipeline ends.
 ///
 /// By chaining multiple filters in a pipeline, you can create sophisticated processing
 /// chains for your media data.

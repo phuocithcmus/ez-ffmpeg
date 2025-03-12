@@ -31,11 +31,11 @@ use std::ptr::null_mut;
 pub mod ffmpeg_context;
 
 /// The **ffmpeg_context_builder** module defines the builder pattern for creating
-/// [`FfmpegContext`](crate::core::context::ffmpeg_context::FfmpegContext) objects.
+/// [`FfmpegContext`](ffmpeg_context::FfmpegContext) objects.
 ///
-/// It exposes the [`FfmpegContextBuilder`] struct, which allows you to:
-/// - Configure multiple [`Input`](crate::core::context::input::Input) and
-///   [`Output`](crate::core::context::output::Output) streams.
+/// It exposes the [`FfmpegContextBuilder`](ffmpeg_context_builder::FfmpegContextBuilder) struct, which allows you to:
+/// - Configure multiple [`Input`](input::Input) and
+///   [`Output`](output::Output) streams.
 /// - Attach filter descriptions via [`FilterComplex`](crate::core::context::filter_complex::FilterComplex)
 ///   or inline strings (e.g., `"scale=1280:720"`, `"hue=s=0"`).
 /// - Produce a finished `FfmpegContext` that can then be executed by
@@ -65,7 +65,7 @@ pub mod ffmpeg_context_builder;
 /// - A **custom data source** via a `read_callback` (and optionally `seek_callback`) for
 ///   advanced scenarios like in-memory buffers or network protocols.
 ///
-/// You can also specify **frame pipelines** to apply custom [`FrameFilter`](crate::core::filter::FrameFilter)
+/// You can also specify **frame pipelines** to apply custom [`FrameFilter`](crate::core::filter::frame_filter::FrameFilter)
 /// transformations **after decoding** but **before** the frames move on to the rest of the pipeline.
 ///
 /// # Example
@@ -94,7 +94,7 @@ pub mod input;
 /// You can specify additional details such as:
 /// - **Container format** (e.g., `"mp4"`, `"flv"`, `"mkv"`).
 /// - **Video/Audio/Subtitle codecs** (e.g., `"h264"`, `"aac"`, `"mov_text"`).
-/// - **Frame pipelines** to apply [`FrameFilter`](crate::core::filter::FrameFilter)
+/// - **Frame pipelines** to apply [`FrameFilter`](crate::core::filter::frame_filter::FrameFilter)
 ///   transformations **before encoding**.
 ///
 /// # Example

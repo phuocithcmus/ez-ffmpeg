@@ -57,7 +57,7 @@ pub struct Output {
     ///
     /// If the output format requires seeking but no `seek_callback` is provided, the operation
     /// may fail, resulting in errors such as:
-    /// ```
+    /// ```text
     /// [mp4 @ 0x...] muxer does not support non seekable output
     /// ```
     ///
@@ -356,7 +356,7 @@ impl Output {
     /// **Why is `seek_callback` necessary?**
     /// - Some formats (e.g., MP4) require `seek` operations to update metadata (`moov`, `mdat`).
     /// - If no `seek_callback` is provided for formats that require seeking, FFmpeg will fail with:
-    ///   ```
+    ///   ```text
     ///   [mp4 @ 0x...] muxer does not support non seekable output
     ///   ```
     /// - For streaming formats (`flv`, `ts`, `rtmp`, `hls`), seeking is **not required**.

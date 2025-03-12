@@ -31,7 +31,7 @@ impl Codec {
 
 /// Holds metadata about a specific codec recognized by FFmpeg.
 ///
-/// This struct consolidates information from both [`AVCodec`] (via `codec_name`, `codec_long_name`,
+/// This struct consolidates information from both [`AVCodec`](ffmpeg_sys_next::AVCodec) (via `codec_name`, `codec_long_name`,
 /// etc.) and the [`AVCodecDescriptor`] (via `desc_name`) into a single, user-friendly format. It
 /// can be used to inspect properties of encoders or decoders available in your FFmpeg build.
 ///

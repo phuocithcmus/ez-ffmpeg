@@ -6,7 +6,7 @@ use crate::core::context::filter_complex::FilterComplex;
 /// A builder for constructing [`FfmpegContext`] objects with customized inputs,
 /// outputs, and filter configurations. Typically, you will start by calling
 /// [`FfmpegContext::builder()`], then chain methods to add inputs, outputs, or
-/// filter descriptions, and finally invoke [`build()`] to produce an `FfmpegContext`.
+/// filter descriptions, and finally invoke [`build()`](FfmpegContextBuilder::build) to produce an `FfmpegContext`.
 ///
 /// # Examples
 ///
@@ -270,13 +270,13 @@ impl FfmpegContextBuilder {
     }
 
     /// Finalizes this builder, creating an [`FfmpegContext`] which can then be used
-    /// to run FFmpeg jobs via [`FfmpegContext::start()`] or by constructing an
-    /// [`FfmpegScheduler`] yourself.
+    /// to run FFmpeg jobs via [`FfmpegContext::start()`](FfmpegContext::start) or by constructing an
+    /// [`FfmpegScheduler`](crate::FfmpegScheduler) yourself.
     ///
     /// # Errors
     /// Returns an error if any configuration issues are found (e.g., invalid URL syntax,
     /// conflicting filter settings, etc.).
-    /// (The actual validation depends on how [`FfmpegContext::new`] is implemented.)
+    /// (The actual validation depends on how [`FfmpegContext::new_with_independent_readrate`](FfmpegContext::new_with_independent_readrate) is implemented.)
     ///
     /// # Example
     /// ```rust
