@@ -427,11 +427,46 @@ extern "C" fn cleanup() {
     log::debug!("FFmpeg cleaned up");
 }
 
+// The following type definitions for `VaListType` are inspired by the Rust standard library's
+// implementation of `va_list` (see std::ffi::va_list::VaListImpl). These definitions ensure compatibility
+// with platform-specific ABI requirements when interfacing with C variadic functions.
+
+#[cfg(any(
+    all(
+        not(target_arch = "aarch64"),
+        not(target_arch = "powerpc"),
+        not(target_arch = "s390x"),
+        not(target_arch = "x86_64")
+    ),
+    all(target_arch = "aarch64", target_vendor = "apple"),
+    target_family = "wasm",
+    target_os = "uefi",
+    windows,
+))]
+type VaListType = *mut libc::c_char;
+
+#[cfg(all(target_arch = "x86_64", not(target_os = "uefi"), not(windows)))]
+type VaListType = *mut ffmpeg_sys_next::__va_list_tag;
+
+#[cfg(all(
+    target_arch = "aarch64",
+    not(target_vendor = "apple"),
+    not(target_os = "uefi"),
+    not(windows),
+))]
+pub type VaListType = *mut ffmpeg_sys_next::__va_list_tag_aarch64;
+
+#[cfg(all(target_arch = "powerpc", not(target_os = "uefi"), not(windows)))]
+pub type VaListType = *mut ffmpeg_sys_next::__va_list_tag_powerpc;
+
+#[cfg(target_arch = "s390x")]
+pub type VaListType = *mut ffmpeg_sys_next::__va_list_tag_s390x;
+
 unsafe extern "C" fn ffmpeg_log_callback(
     ptr: *mut libc::c_void,
     level: libc::c_int,
     fmt: *const libc::c_char,
-    args: *mut libc::c_char,
+    args: VaListType,
 ) {
     // Create a fixed-size buffer to hold the formatted log message.
     let mut buffer = [0u8; 1024];
