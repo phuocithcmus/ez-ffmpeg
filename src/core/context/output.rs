@@ -888,7 +888,7 @@ impl Output {
     ///   - 17-18: Visually lossless
     ///   - 23: High quality
     ///   - 28: Good quality with reasonable file size
-    /// * **MPEG-4/MPEG-2**: 1-31 (recommended: 2-6)
+    /// * **MPEG-4/MPEG-2**: 2-31 (recommended: 2-6)
     ///   - Lower values = higher quality
     /// * **VP9**: 0-63 (if needed: 15-35)
     ///
