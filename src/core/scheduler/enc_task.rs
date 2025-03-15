@@ -84,6 +84,16 @@ pub(crate) fn enc_init(
             OpenEncoderOperationError::ContextAllocationError(OpenEncoderError::OutOfMemory),
         ));
     }
+
+    if let Some(qscale) = enc_stream.qscale {
+        if qscale > 0 {
+            unsafe {
+                (*enc_ctx).flags |= ffmpeg_sys_next::AV_CODEC_FLAG_QSCALE as i32;
+                (*enc_ctx).global_quality = ffmpeg_sys_next::FF_QP2LAMBDA * qscale;
+            }
+        }
+    }
+
     if oformat_flags & ffmpeg_sys_next::AVFMT_GLOBALHEADER != 0 {
        unsafe { (*enc_ctx).flags |= ffmpeg_sys_next::AV_CODEC_FLAG_GLOBAL_HEADER as i32; }
     }

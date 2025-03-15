@@ -33,6 +33,10 @@ pub(crate) struct Muxer {
     pub(crate) audio_channels: Option<i32>,
     pub(crate) audio_sample_fmt: Option<AVSampleFormat>,
 
+
+    pub(crate) video_qscale: Option<i32>,
+    pub(crate) audio_qscale: Option<i32>,
+
     pub(crate) max_video_frames: Option<i64>,
     pub(crate) max_audio_frames: Option<i64>,
     pub(crate) max_subtitle_frames: Option<i64>,
@@ -74,6 +78,8 @@ impl Muxer {
         audio_sample_rate: Option<i32>,
         audio_channels: Option<i32>,
         audio_sample_fmt: Option<AVSampleFormat>,
+        video_qscale: Option<i32>,
+        audio_qscale: Option<i32>,
         max_video_frames: Option<i64>,
         max_audio_frames: Option<i64>,
         max_subtitle_frames: Option<i64>,
@@ -99,6 +105,8 @@ impl Muxer {
             audio_sample_rate,
             audio_channels,
             audio_sample_fmt,
+            video_qscale,
+            audio_qscale,
             max_video_frames,
             max_audio_frames,
             max_subtitle_frames,
@@ -135,6 +143,14 @@ impl Muxer {
             None
         };
 
+        let qscale = if media_type == AVMediaType::AVMEDIA_TYPE_VIDEO {
+            self.video_qscale
+        } else if media_type == AVMediaType::AVMEDIA_TYPE_AUDIO {
+            self.audio_qscale
+        } else {
+            None
+        };
+
         let (pre_packet_sender, pre_packet_receiver) = crossbeam_channel::bounded(65536);
         self.src_pre_receivers.push(pre_packet_receiver);
 
@@ -145,6 +161,7 @@ impl Muxer {
             media_type,
             enc,
             vsync_method,
+            qscale,
             frame_receiver,
             packet_sender,
             pre_packet_sender,

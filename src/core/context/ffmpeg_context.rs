@@ -1276,6 +1276,8 @@ unsafe fn open_output_file(index: usize, output: &mut Output) -> Result<Muxer> {
         output.audio_sample_rate,
         output.audio_channels,
         output.audio_sample_fmt,
+        output.video_qscale,
+        output.audio_qscale,
         output.max_video_frames,
         output.max_audio_frames,
         output.max_subtitle_frames,

@@ -199,6 +199,14 @@ pub struct Output {
     pub(crate) audio_channels: Option<i32>,
     pub(crate) audio_sample_fmt: Option<AVSampleFormat>,
 
+    // -q:v
+    // use fixed quality scale (VBR)
+    pub(crate) video_qscale: Option<i32>,
+
+    // -q:a
+    // set audio quality (codec-specific)
+    pub(crate) audio_qscale: Option<i32>,
+
     /// Maximum number of **video** frames to encode (equivalent to `-frames:v` in FFmpeg).
     ///
     /// This option limits the number of **video** frames processed by the encoder.
@@ -860,6 +868,99 @@ impl Output {
         self
     }
 
+    /// Sets the **video quality scale** (VBR) for encoding.
+    ///
+    /// This method configures a fixed quality scale for variable bitrate (VBR) video encoding.
+    /// Lower values result in higher quality but larger file sizes, while higher values
+    /// produce lower quality with smaller file sizes.
+    ///
+    /// # Note on Modern Usage
+    /// While still supported, using fixed quality scale (`-q:v`) is generally not recommended
+    /// for modern video encoding workflows with codecs like H.264 and H.265. Instead, consider:
+    /// * For H.264/H.265: Use CRF (Constant Rate Factor) via `-crf` parameter
+    /// * For two-pass encoding: Use target bitrate settings
+    ///
+    /// This parameter is primarily useful for older codecs or specific scenarios where
+    /// direct quality scale control is needed.
+    ///
+    /// # Quality Scale Ranges by Codec
+    /// * **H.264/H.265**: 0-51 (if needed: 17-28)
+    ///   - 17-18: Visually lossless
+    ///   - 23: High quality
+    ///   - 28: Good quality with reasonable file size
+    /// * **MPEG-4/MPEG-2**: 1-31 (recommended: 2-6)
+    ///   - Lower values = higher quality
+    /// * **VP9**: 0-63 (if needed: 15-35)
+    ///
+    /// # Parameters
+    /// * `video_qscale` - The quality scale value for video encoding.
+    ///
+    /// # Returns
+    /// * `Self` - The modified `Output`, allowing method chaining.
+    ///
+    /// # Example
+    /// ```rust
+    /// // For MJPEG encoding of image sequences
+    /// let output = Output::from("output.jpg")
+    ///     .set_video_qscale(2);  // High quality JPEG images
+    ///
+    /// // For legacy image format conversion
+    /// let output = Output::from("output.png")
+    ///     .set_video_qscale(3);  // Controls compression level
+    /// ```
+    pub fn set_video_qscale(mut self, video_qscale: i32) -> Self {
+        self.video_qscale = Some(video_qscale);
+        self
+    }
+
+    /// Sets the **audio quality scale** for encoding.
+    ///
+    /// This method configures codec-specific audio quality settings. The range, behavior,
+    /// and optimal values depend entirely on the audio codec being used.
+    ///
+    /// # Quality Scale Ranges by Codec
+    /// * **MP3 (libmp3lame)**: 0-9 (recommended: 2-5)
+    ///   - 0: Highest quality
+    ///   - 2: Near-transparent quality (~190-200 kbps)
+    ///   - 5: Good quality (~130 kbps)
+    ///   - 9: Lowest quality
+    /// * **AAC**: 0.1-255 (recommended: 1-5)
+    ///   - 1: Highest quality (~250 kbps)
+    ///   - 3: Good quality (~160 kbps)
+    ///   - 5: Medium quality (~100 kbps)
+    /// * **Vorbis**: -1 to 10 (recommended: 3-8)
+    ///   - 10: Highest quality
+    ///   - 5: Good quality
+    ///   - 3: Medium quality
+    ///
+    /// # Parameters
+    /// * `audio_qscale` - The quality scale value for audio encoding.
+    ///
+    /// # Returns
+    /// * `Self` - The modified `Output`, allowing method chaining.
+    ///
+    /// # Example
+    /// ```rust
+    /// // For MP3 encoding at high quality
+    /// let output = Output::from("output.mp3")
+    ///     .set_audio_codec("libmp3lame")
+    ///     .set_audio_qscale(2);
+    ///
+    /// // For AAC encoding at good quality
+    /// let output = Output::from("output.m4a")
+    ///     .set_audio_codec("aac")
+    ///     .set_audio_qscale(3);
+    ///
+    /// // For Vorbis encoding at high quality
+    /// let output = Output::from("output.ogg")
+    ///     .set_audio_codec("libvorbis")
+    ///     .set_audio_qscale(7);
+    /// ```
+    pub fn set_audio_qscale(mut self, audio_qscale: i32) -> Self {
+        self.audio_qscale = Some(audio_qscale);
+        self
+    }
+
     /// **Sets the maximum number of video frames to encode (`-frames:v`).**
     ///
     /// **Equivalent FFmpeg Command:**
@@ -1138,6 +1239,8 @@ impl From<Box<dyn FnMut(&[u8]) -> i32>> for Output {
             audio_sample_rate: None,
             audio_channels: None,
             audio_sample_fmt: None,
+            video_qscale: None,
+            audio_qscale: None,
             max_video_frames: None,
             max_audio_frames: None,
             max_subtitle_frames: None,
@@ -1170,6 +1273,8 @@ impl From<String> for Output {
             audio_sample_rate: None,
             audio_channels: None,
             audio_sample_fmt: None,
+            video_qscale: None,
+            audio_qscale: None,
             max_video_frames: None,
             max_audio_frames: None,
             max_subtitle_frames: None,
