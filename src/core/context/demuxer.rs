@@ -36,6 +36,9 @@ pub(crate) struct Demuxer {
     pub(crate) exit_on_error: Option<bool>,
     pub(crate) stream_loop: Option<i32>,
 
+    #[cfg(windows)]
+    pub(crate) hwaccel: Option<String>,
+
     pub(crate) node: Arc<SchNode>,
     streams: Vec<DecoderStream>,
     dsts: Vec<(Sender<PacketBox>, usize, Option<usize>)>,
@@ -70,7 +73,7 @@ impl Demuxer {
             video_codec,
             audio_codec,
             subtitle_codec,
-            hwaccel,
+            hwaccel.clone(),
             hwaccel_device,
             hwaccel_output_format,
         )?;
@@ -86,6 +89,8 @@ impl Demuxer {
             recording_time_us,
             exit_on_error,
             stream_loop,
+            #[cfg(windows)]
+            hwaccel,
             node: Arc::new(SchNode::Demux { waiter: Arc::new(Default::default()), task_exited: Arc::new(Default::default()) }),
             streams,
             dsts: vec![],

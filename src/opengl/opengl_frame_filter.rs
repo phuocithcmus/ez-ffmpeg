@@ -10,6 +10,7 @@ use log::{info, warn};
 use surfman::{
     Connection, ContextAttributeFlags, ContextAttributes,
 };
+use crate::util::ffmpeg_utils::av_err2str;
 
 /// OpenGLFrameFilter: A struct to manage OpenGL-based frame filtering.
 /// It allows custom shader setup, OpenGL initialization, and texture-based processing of video frames.

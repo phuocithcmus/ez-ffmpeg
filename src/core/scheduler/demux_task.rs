@@ -68,6 +68,8 @@ pub(crate) fn demux_init(
     demux.in_fmt_ctx = null_mut();
     let in_fmt_ctx_box = AVFormatContextBox::new(in_fmt_ctx, true, demux.is_set_read_callback);
 
+    #[cfg(windows)]
+    let hwaccel = { demux.hwaccel.take() };
 
     let format_name = unsafe {std::str::from_utf8_unchecked(CStr::from_ptr((*(*in_fmt_ctx).iformat).name).to_bytes())};
 
@@ -122,27 +124,44 @@ pub(crate) fn demux_init(
                         }
 
                         if demux_paramter.stream_loop != 0 {
-                            /* signal looping to our consumers */
-                            (*packet.as_mut_ptr()).stream_index = -1;
-                            let packet_box = PacketBox {
-                                packet,
-                                packet_data: PacketData {
-                                    dts_est: 0,
-                                    codec_type: AVMediaType::AVMEDIA_TYPE_UNKNOWN,
-                                    output_stream_index: 0,
-                                    is_copy: false,
-                                    codecpar: null_mut(),
-                                },
+                            // Windows-specific CUDA handling logic
+                            #[cfg(windows)]
+                            let should_skip_packet_send = hwaccel.as_deref() == Some("cuda");
+
+                            // On non-Windows platforms, always send the packet
+                            #[cfg(not(windows))]
+                            let should_skip_packet_send = false;
+
+                            // Selectively bypass packet sending based on platform and acceleration
+                            let mut ret = if should_skip_packet_send {
+                                // Skip sending the flush packet when using CUDA on Windows
+                                // This avoids the "cuvid decode callback error" issue that occurs during loop iterations
+                                // Testing showed that after the third loop iteration, avcodec_receive_frame would consistently
+                                // return AVERROR_EXTERNAL with the internal error "cuvid decode callback error"
+                                0 // Assume success
+                            } else {
+                                /* signal looping to our consumers by setting stream_index to -1 (flush packet) */
+                                (*packet.as_mut_ptr()).stream_index = -1;
+                                let packet_box = PacketBox {
+                                    packet,
+                                    packet_data: PacketData {
+                                        dts_est: 0,
+                                        codec_type: AVMediaType::AVMEDIA_TYPE_UNKNOWN,
+                                        output_stream_index: 0,
+                                        is_copy: false,
+                                        codecpar: null_mut(),
+                                    },
+                                };
+                                demux_send(&mut demux_paramter, packet_box, &packet_pool, 0, &demux_node, &scheduler_status, independent_readrate)
                             };
-                            let mut ret =
-                                demux_send(&mut demux_paramter, packet_box, &packet_pool, 0, &demux_node, &scheduler_status, independent_readrate);
+
+                            // Common seek operation for both cases
                             if ret >= 0 {
                                 ret = seek_to_start(&mut demux_paramter, in_fmt_ctx_box.fmt_ctx);
                                 if ret >= 0 {
                                     continue;
                                 }
                             }
-
                             /* fallthrough to the error path */
                         }
 
