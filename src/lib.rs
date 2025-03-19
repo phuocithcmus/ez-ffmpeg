@@ -95,7 +95,7 @@
 //! please ensure that your usage complies with FFmpeg's license.
 
 pub mod core;
-mod util;
+pub mod util;
 pub mod error;
 
 pub use self::core::context::ffmpeg_context::FfmpegContext;

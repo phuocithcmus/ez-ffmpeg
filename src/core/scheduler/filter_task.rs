@@ -61,6 +61,7 @@ use std::ptr::{null, null_mut};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use crate::util::ffmpeg_utils::av_err2str;
 
 pub(crate) fn filter_graph_init(
     fg_index: usize,
@@ -672,7 +673,7 @@ unsafe fn fg_send_frame(
     frame_pool.release(frame_box.frame);
     if ret < 0 {
         if ret != AVERROR_EOF {
-            error!("Error while filtering: {ret}");
+            error!("Error while filtering: {}", av_err2str(ret));
         }
         return Err(Error::FilterGraph(
             FilterGraphOperationError::BufferSourceAddFrameError(FilterGraphError::from(ret)),
@@ -1192,7 +1193,7 @@ unsafe fn fg_read_frames(
             if ret == AVERROR_EOF {
                 trace!("Filtergraph returned EOF, finishing");
             } else {
-                error!("Error requesting a frame from the filtergraph: {ret}");
+                error!("Error requesting a frame from the filtergraph: {}", av_err2str(ret));
             }
             return ret;
         }
@@ -1272,7 +1273,7 @@ unsafe fn fg_output_step(
         return 1;
     } else if ret < 0 {
         frame_pool.release(frame);
-        warn!("Error in retrieving a frame from the filtergraph: {ret}");
+        warn!("Error in retrieving a frame from the filtergraph: {}", av_err2str(ret));
         return ret;
     }
 
@@ -1856,7 +1857,7 @@ fn ifilter_parameters_from_frame(
         // Replace hw_frames_ctx
         let ret = av_buffer_replace(&mut ifp.hw_frames_ctx, (*frame).hw_frames_ctx);
         if ret < 0 {
-            error!("Replace hw_frames_ctx error: {ret}");
+            error!("Replace hw_frames_ctx error: {}", av_err2str(ret));
             return Err(Error::FilterGraph(
                 FilterGraphOperationError::BufferReplaceoseError(FilterGraphError::from(ret)),
             ));
@@ -1886,7 +1887,7 @@ fn ifilter_parameters_from_frame(
         ifp.sample_rate = (*frame).sample_rate;
         let ret = av_channel_layout_copy(&mut ifp.ch_layout, &(*frame).ch_layout);
         if ret < 0 {
-            error!("layout_copy error: {ret}");
+            error!("layout_copy error: {}", av_err2str(ret));
             return Err(Error::FilterGraph(
                 FilterGraphOperationError::ChannelLayoutCopyError(FilterGraphError::from(ret)),
             ));
@@ -2729,11 +2730,12 @@ unsafe fn filter_opt_apply(f: *mut AVFilterContext, mut key: *mut c_char, val: *
     };
     if o.is_null() {
         error!(
-            "Error applying option '{}' to filter '{}': {ret}",
+            "Error applying option '{}' to filter '{}': {}",
             CStr::from_ptr(key).to_str().unwrap_or("[unknow key]"),
             CStr::from_ptr((*(*f).filter).name)
                 .to_str()
                 .unwrap_or("[unknow filter name]"),
+            av_err2str(ret)
         );
         return ret;
     }
@@ -2776,11 +2778,12 @@ unsafe fn filter_opt_apply(f: *mut AVFilterContext, mut key: *mut c_char, val: *
     }
     if ret < 0 {
         error!(
-            "Error applying option '{}' to filter '{}': {ret}",
+            "Error applying option '{}' to filter '{}': {}",
             CStr::from_ptr(key).to_str().unwrap_or("[unknow key]"),
             CStr::from_ptr((*(*f).filter).name)
                 .to_str()
                 .unwrap_or("[unknow filter name]"),
+            av_err2str(ret)
         );
         return ret;
     }
@@ -2824,8 +2827,9 @@ unsafe fn read_binary(path: *mut c_char) -> crate::error::Result<(*mut c_void, i
     let ret = avio_open2(&mut io, path, AVIO_FLAG_READ, null(), null_mut());
     if ret < 0 {
         error!(
-            "Cannot open file '{}': {ret}",
-            CStr::from_ptr(path).to_str().unwrap_or("[unknow path]")
+            "Cannot open file '{}': {}",
+            CStr::from_ptr(path).to_str().unwrap_or("[unknow path]"),
+            av_err2str(ret)
         );
         return Err(ret);
     }

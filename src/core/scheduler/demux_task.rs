@@ -29,6 +29,7 @@ use std::ptr::null_mut;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use crate::core::scheduler::input_controller::SchNode;
+use crate::util::ffmpeg_utils::av_err2str;
 
 #[cfg(feature = "docs-rs")]
 pub(crate) fn demux_init(
@@ -108,7 +109,7 @@ pub(crate) fn demux_init(
                         if ret == AVERROR_EOF {
                             debug!("EOF while reading input");
                         } else {
-                            error!("Error during demuxing: {ret}");
+                            error!("Error during demuxing: {}", av_err2str(ret));
                             ret = if !is_started || demux_paramter.exit_on_error {
                                 ret
                             } else {
@@ -880,6 +881,16 @@ unsafe fn seek_to_start(
     if demux_paramter.stream_loop > 0 {
         demux_paramter.stream_loop -= 1;
     }
+
+    let loop_status = if demux_paramter.stream_loop > 0 {
+        format!("Remaining loops: {}", demux_paramter.stream_loop)
+    } else if demux_paramter.stream_loop == 0 {
+        "Last loop".to_string()
+    } else {
+        "Infinite loop mode".to_string()
+    };
+
+    debug!("Repositioning stream to starting point: position={start_time}μs, {loop_status}");
 
     ret
 }

@@ -30,7 +30,7 @@ use std::ptr::{null, null_mut};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
-
+use crate::util::ffmpeg_utils::av_err2str;
 
 #[cfg(feature = "docs-rs")]
 pub(crate) fn dec_init(
@@ -160,7 +160,7 @@ pub(crate) fn dec_init(
                         } else {
                             err_exit = true;
                             set_scheduler_error(&scheduler_status, &scheduler_result, e);
-                            error!("Error processing packet in decoder: {ret}");
+                            error!("Error processing packet in decoder: {}", av_err2str(ret));
                             break;
                         }
                     }
@@ -314,7 +314,7 @@ unsafe fn transcode_subtitles(
     );
     packet_pool.release(packet_box.packet);
     if ret < 0 {
-        error!("Error decoding subtitles: {ret}");
+        error!("Error decoding subtitles: {}", av_err2str(ret));
         dp.dec.decode_errors = dp.dec.decode_errors + 1;
         return if exit_on_error {
             Err(Decoding(DecodeSubtitleError(DecodingError::from(ret))))
@@ -674,7 +674,7 @@ fn dec_open(
             ret = hw_device_setup_for_decode(&mut dp, dec_stream.codec.as_ptr(), dec_ctx);
             if ret < 0 {
                 avcodec_free_context(&mut dec_ctx);
-                error!("Hardware device setup failed for decoder: {ret}");
+                error!("Hardware device setup failed for decoder: {}", av_err2str(ret));
                 return Err(OpenDecoder(OpenDecoderOperationError::HwSetupError(
                     OpenDecoderError::from(ret),
                 )));
@@ -684,7 +684,7 @@ fn dec_open(
         ret = av_opt_set_dict2(dec_ctx as *mut c_void, &mut dec_opts, ffmpeg_sys_next::AV_OPT_SEARCH_CHILDREN);
         if ret < 0 {
             avcodec_free_context(&mut dec_ctx);
-            error!("Error applying decoder options: {ret}");
+            error!("Error applying decoder options: {}", av_err2str(ret));
             return Err(OpenDecoder(
                 OpenDecoderOperationError::ParameterApplicationError(OpenDecoderError::from(ret)),
             ));
@@ -702,7 +702,7 @@ fn dec_open(
         ret = avcodec_open2(dec_ctx, dec_stream.codec.as_ptr(), null_mut());
         if ret < 0 {
             avcodec_free_context(&mut dec_ctx);
-            error!("Error while opening decoder: {ret}");
+            error!("Error while opening decoder: {}", av_err2str(ret));
             return Err(OpenDecoder(OpenDecoderOperationError::DecoderOpenError(
                 OpenDecoderError::from(ret),
             )));
@@ -1208,12 +1208,13 @@ unsafe fn packet_decode(
             return Err(Bug);
         }
         error!(
-            "Error submitting {} to decoder: {ret}",
+            "Error submitting {} to decoder: {}",
             if (*packet_box.packet.as_ptr()).stream_index < 0 {
                 "EOF"
             } else {
                 "packet"
-            }
+            },
+            av_err2str(ret)
         );
 
         packet_pool.release(packet_box.packet);
@@ -1248,7 +1249,7 @@ unsafe fn packet_decode(
         } else if ret == AVERROR_EOF {
             return Err(Error::EOF);
         } else if ret < 0 {
-            error!("Decoding error: {ret}");
+            error!("Decoding error: {}", av_err2str(ret));
             let dp = dp_arc.clone();
             let mut dp = dp.lock().unwrap();
             dp.dec.decode_errors += 1;

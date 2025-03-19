@@ -451,7 +451,7 @@ impl OpenGLFrameFilter {
 
             let ret = av_frame_get_buffer(rgb_frame.as_mut_ptr(), 0);
             if ret < 0 {
-                return Err(format!("Failed to allocate buffer for RGB frame. {ret}"));
+                return Err(format!("Failed to allocate buffer for RGB frame. {}", av_err2str(ret)));
             }
         }
         self.rgb_frame = Some(rgb_frame);
@@ -577,7 +577,7 @@ impl OpenGLFrameFilter {
                 (*rgb_frame.as_mut_ptr()).linesize.as_ptr() as *mut _,
             );
             if ret <= 0 {
-                return Err(format!("Failed to scale frame to rgb: {ret}"));
+                return Err(format!("Failed to scale frame to rgb: {}", av_err2str(ret)));
             }
         }
 
@@ -600,7 +600,7 @@ impl OpenGLFrameFilter {
                 (*original_frame.as_mut_ptr()).linesize.as_ptr() as *mut _,
             );
             if ret <= 0 {
-                return Err(format!("Failed to scale frame to rgb: {ret}"));
+                return Err(format!("Failed to scale frame to rgb: {}", av_err2str(ret)));
             }
         }
 

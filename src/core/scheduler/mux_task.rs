@@ -5,7 +5,7 @@ use crate::core::scheduler::ffmpeg_scheduler::{packet_is_null, set_scheduler_err
 use crate::core::scheduler::input_controller::{InputController, SchNode};
 use crate::error::Error::Muxing;
 use crate::error::{MuxingError, MuxingOperationError, WriteHeaderError};
-use crate::util::ffmpeg_utils::hashmap_to_avdictionary;
+use crate::util::ffmpeg_utils::{av_err2str, hashmap_to_avdictionary};
 use crate::util::thread_synchronizer::ThreadSynchronizer;
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use ffmpeg_next::packet::{Mut, Ref};
@@ -200,7 +200,7 @@ fn _mux_init(
 
     let ret = unsafe { avformat_write_header(out_fmt_ctx, &mut opts) };
     if ret < 0 {
-        error!("Could not write header (incorrect codec parameters ?): {ret}");
+        error!("Could not write header (incorrect codec parameters ?): {}", av_err2str(ret));
         thread_sync.thread_done();
         if thread_sync.is_all_threads_done() {
             scheduler_status.store(STATUS_END, Ordering::Release);
@@ -320,7 +320,7 @@ fn _mux_init(
         unsafe {
             let ret = av_write_trailer(out_fmt_ctx_box.fmt_ctx);
             if ret < 0 {
-                error!("Error writing trailer: {ret}");
+                error!("Error writing trailer: {}", av_err2str(ret));
                 set_scheduler_error(
                     &scheduler_status,
                     &scheduler_result,

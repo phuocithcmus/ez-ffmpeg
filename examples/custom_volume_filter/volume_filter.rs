@@ -67,7 +67,7 @@ impl FrameFilter for VolumeFilter {
 
                     let mut ret = av_frame_copy_props(resample_frame.as_mut_ptr(), frame.as_ptr());
                     if ret < 0 {
-                        return Err(format!("failed to copy properties. ret:{ret}"));
+                        return Err(format!("failed to copy properties. ret:{}", av_err2str(ret)));
                     }
 
                     (*resample_frame.as_mut_ptr()).sample_rate = sample_rate;
@@ -77,7 +77,7 @@ impl FrameFilter for VolumeFilter {
 
                     ret = av_frame_get_buffer(resample_frame.as_mut_ptr(), 0);
                     if ret < 0 {
-                        return Err(format!("failed to allocate buffer for resample_frame. {ret}"));
+                        return Err(format!("failed to allocate buffer for resample_frame. {}", av_err2str(ret)));
                     }
 
                     // Perform resampling
@@ -90,9 +90,10 @@ impl FrameFilter for VolumeFilter {
                     );
                     if ret < 0 {
                         return Err(format!(
-                            "failed to resample frame[format:{}] to dst_frame[format:{}]: {ret}",
+                            "failed to resample frame[format:{}] to dst_frame[format:{}]: {}",
                             (*frame.as_ptr()).format,
                             (*resample_frame.as_ptr()).format,
+                            ez_ffmpeg::util::ffmpeg_utils::av_err2str(ret)
                         ));
                     }
                     resample_frame

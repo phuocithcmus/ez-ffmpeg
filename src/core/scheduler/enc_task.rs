@@ -7,7 +7,7 @@ use crate::core::scheduler::ffmpeg_scheduler::{
     frame_is_null, packet_is_null, set_scheduler_error, wait_until_not_paused, STATUS_END,
 };
 use crate::hwaccel::hw_device_get_by_type;
-use crate::util::ffmpeg_utils::hashmap_to_avdictionary;
+use crate::util::ffmpeg_utils::{av_err2str, hashmap_to_avdictionary};
 use crossbeam_channel::{RecvTimeoutError, SendError, Sender};
 use ffmpeg_next::packet::Mut;
 use ffmpeg_next::{Frame, Packet};
@@ -224,7 +224,7 @@ pub(crate) fn enc_init(
                                 align_mask,
                             );
                             if let Err(ret) = result {
-                                error!("Error receive audio frame: {ret}");
+                                error!("Error receive audio frame: {}", av_err2str(ret));
                                 set_scheduler_error(
                                     &scheduler_status,
                                     &scheduler_result,
@@ -361,7 +361,7 @@ fn set_encoder_opts(enc_stream: &EncoderStream, video_codec_opts: &Option<HashMa
             )
         };
         if ret < 0 {
-            error!("Error applying encoder options: {ret}");
+            error!("Error applying encoder options: {}", av_err2str(ret));
             return Err(OpenEncoder(
                 OpenEncoderOperationError::ContextAllocationError(OpenEncoderError::from(ret)),
             ));

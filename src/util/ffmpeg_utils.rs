@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::ffi::CString;
-use ffmpeg_sys_next::{av_dict_set, AVDictionary};
+use std::ffi::{CStr, CString};
+use ffmpeg_sys_next::{av_dict_set, av_strerror, AVDictionary, AV_ERROR_MAX_STRING_SIZE};
 
 pub(crate) fn hashmap_to_avdictionary(opts: &Option<HashMap<CString, CString>>) -> *mut AVDictionary {
     let mut av_dict: *mut AVDictionary = std::ptr::null_mut();
@@ -14,4 +14,16 @@ pub(crate) fn hashmap_to_avdictionary(opts: &Option<HashMap<CString, CString>>) 
     }
 
     av_dict
+}
+
+pub fn av_err2str(err: i32) -> String {
+    unsafe {
+        let mut buffer = [0i8; AV_ERROR_MAX_STRING_SIZE];
+        av_strerror(err, buffer.as_mut_ptr(), AV_ERROR_MAX_STRING_SIZE);
+        let c_str = CStr::from_ptr(buffer.as_ptr());
+        match c_str.to_str() {
+            Ok(s) => s.to_string(),
+            Err(_) => format!("Unknown error: {}", err),
+        }
+    }
 }
