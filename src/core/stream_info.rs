@@ -32,7 +32,7 @@ pub enum StreamInfo {
         nb_frames: i64,
 
         /// The raw frame rate (frames per second) of the video stream, represented as a rational number.
-        framerate: AVRational,
+        r_frame_rate: AVRational,
 
         /// The sample aspect ratio of the video frames, which represents the shape of individual pixels.
         sample_aspect_ratio: AVRational,
@@ -41,7 +41,7 @@ pub enum StreamInfo {
         metadata: HashMap<String, String>,
 
         /// The average frame rate of the stream, potentially accounting for variable frame rates.
-        avg_framerate: AVRational,
+        avg_frame_rate: AVRational,
 
         // from AVCodecParameters
 
@@ -67,7 +67,7 @@ pub enum StreamInfo {
         video_delay: i32,
 
         /// The frames per second (FPS) of the video stream, represented as a floating point number.
-        /// It is calculated from the `framerate` field (framerate.num / framerate.den).
+        /// It is calculated from the `avg_framerate` field (avg_framerate.num / avg_framerate.den).
         fps: f32,
 
         /// The rotation of the video stream in degrees. This value is retrieved from the metadata.
@@ -97,7 +97,7 @@ pub enum StreamInfo {
         metadata: HashMap<String, String>,
 
         /// The average frame rate of the audio stream, which might not always be applicable for audio streams.
-        avg_framerate: AVRational,
+        avg_frame_rate: AVRational,
 
         // from AVCodecParameters
 
@@ -269,11 +269,11 @@ pub fn find_video_stream_info(url: &str) -> Result<Option<StreamInfo>> {
         let start_time = (*video_stream).start_time;
         let duration = (*video_stream).duration;
         let nb_frames = (*video_stream).nb_frames;
-        let framerate = (*video_stream).r_frame_rate;
+        let r_frame_rate = (*video_stream).r_frame_rate;
         let sample_aspect_ratio = (*video_stream).sample_aspect_ratio;
         let metadata = (*video_stream).metadata;
         let metadata = av_dict_to_hashmap(metadata);
-        let avg_framerate = (*video_stream).avg_frame_rate;
+        let avg_frame_rate = (*video_stream).avg_frame_rate;
 
         let codec_parameters = (*video_stream).codecpar;
         let codec_id = (*codec_parameters).codec_id;
@@ -284,7 +284,7 @@ pub fn find_video_stream_info(url: &str) -> Result<Option<StreamInfo>> {
         let bit_rate = (*codec_parameters).bit_rate;
         let pixel_format = (*codec_parameters).format;
         let video_delay = (*codec_parameters).video_delay;
-        let fps = framerate.num as f32 / framerate.den as f32;
+        let fps = avg_frame_rate.num as f32 / avg_frame_rate.den as f32;
 
         // Fetch the rotation info from metadata (if present)
         let rotate = metadata
@@ -298,10 +298,10 @@ pub fn find_video_stream_info(url: &str) -> Result<Option<StreamInfo>> {
             start_time,
             duration,
             nb_frames,
-            framerate,
+            r_frame_rate,
             sample_aspect_ratio,
             metadata,
-            avg_framerate,
+            avg_frame_rate,
             codec_id,
             codec_name: codec_name.to_string(),
             width,
@@ -370,7 +370,7 @@ pub fn find_audio_stream_info(url: &str) -> Result<Option<StreamInfo>> {
         let nb_frames = (*audio_stream).nb_frames;
         let metadata = (*audio_stream).metadata;
         let metadata = av_dict_to_hashmap(metadata);
-        let avg_framerate = (*audio_stream).avg_frame_rate;
+        let avg_frame_rate = (*audio_stream).avg_frame_rate;
 
         let codec_parameters = (*audio_stream).codecpar;
         let codec_id = (*codec_parameters).codec_id;
@@ -390,7 +390,7 @@ pub fn find_audio_stream_info(url: &str) -> Result<Option<StreamInfo>> {
             duration,
             nb_frames,
             metadata,
-            avg_framerate,
+            avg_frame_rate,
             codec_id,
             codec_name: codec_name.to_string(),
             sample_rate,
@@ -717,7 +717,7 @@ pub fn find_all_stream_infos(url: &str) -> Result<Vec<StreamInfo>> {
             let start_time = (*stream).start_time;
             let duration = (*stream).duration;
             let nb_frames = (*stream).nb_frames;
-            let avg_framerate = (*stream).avg_frame_rate;
+            let avg_frame_rate = (*stream).avg_frame_rate;
             let metadata = av_dict_to_hashmap((*stream).metadata);
 
             match (*codec_parameters).codec_type {
@@ -727,9 +727,9 @@ pub fn find_all_stream_infos(url: &str) -> Result<Vec<StreamInfo>> {
                     let bit_rate = (*codec_parameters).bit_rate;
                     let pixel_format = (*codec_parameters).format;
                     let video_delay = (*codec_parameters).video_delay;
-                    let framerate = (*stream).r_frame_rate;
+                    let r_frame_rate = (*stream).r_frame_rate;
                     let sample_aspect_ratio = (*stream).sample_aspect_ratio;
-                    let fps = framerate.num as f32 / framerate.den as f32;
+                    let fps = avg_frame_rate.num as f32 / avg_frame_rate.den as f32;
 
                     // Fetch the rotation info from metadata (if present)
                     let rotate = metadata
@@ -743,10 +743,10 @@ pub fn find_all_stream_infos(url: &str) -> Result<Vec<StreamInfo>> {
                         start_time,
                         duration,
                         nb_frames,
-                        framerate,
+                        r_frame_rate,
                         sample_aspect_ratio,
                         metadata,
-                        avg_framerate,
+                        avg_frame_rate,
                         codec_id,
                         codec_name,
                         width,
@@ -773,7 +773,7 @@ pub fn find_all_stream_infos(url: &str) -> Result<Vec<StreamInfo>> {
                         duration,
                         nb_frames,
                         metadata,
-                        avg_framerate,
+                        avg_frame_rate,
                         codec_id,
                         codec_name,
                         sample_rate,
