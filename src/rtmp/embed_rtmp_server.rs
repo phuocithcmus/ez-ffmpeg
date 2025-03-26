@@ -596,7 +596,7 @@ fn handle_connections(
 
         for closed_id in ids_to_clear {
             debug!("Rtmp connection {closed_id} closed");
-            connections.remove(closed_id);
+            let _ = connections.try_remove(closed_id);
             scheduler.notify_connection_closed(closed_id);
         }
     }
