@@ -537,6 +537,7 @@ fn enc_open(
             (*enc_ctx).time_base = (*frame).time_base;
             if let Some(framerate) = frame_box.frame_data.framerate {
                 (*enc_ctx).framerate = framerate;
+                (*stream).avg_frame_rate = framerate;
             }
         }
 

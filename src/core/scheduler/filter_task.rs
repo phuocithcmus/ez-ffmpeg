@@ -364,6 +364,8 @@ impl OutputFilterParameter {
         dst: Option<Sender<FrameBox>>,
         fg_input_index: usize,
     ) -> Self {
+        let mut fpsconv_context = FPSConvContext::default();
+        fpsconv_context.framerate = opts.framerate;
         Self {
             media_type,
             dst,
@@ -371,7 +373,7 @@ impl OutputFilterParameter {
             filter: null_mut(),
             name: "".to_string(),
             opts,
-            fpsconv_context: Default::default(),
+            fpsconv_context,
             eof: false,
             format: AVPixelFormat::AV_PIX_FMT_NONE,
             width: 0,
