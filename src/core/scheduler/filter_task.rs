@@ -2146,7 +2146,7 @@ fn choose_pix_fmts(
     format: AVPixelFormat,
     formats: Option<Vec<AVPixelFormat>>,
 ) {
-    if format == AV_PIX_FMT_NONE && formats.is_none() {
+    if format == AV_PIX_FMT_NONE && (formats.is_none() || formats.as_ref().unwrap().is_empty()) {
         return;
     }
 
