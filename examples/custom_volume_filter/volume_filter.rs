@@ -118,6 +118,7 @@ impl FrameFilter for VolumeFilter {
 use std::arch::aarch64::*;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use std::arch::x86_64::*;
+use ez_ffmpeg::util::ffmpeg_utils::av_err2str;
 
 // SIMD-based volume adjustment
 #[inline]
