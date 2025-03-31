@@ -8,7 +8,7 @@ use crate::core::scheduler::ffmpeg_scheduler::{
 };
 use crate::hwaccel::hw_device_get_by_type;
 use crate::util::ffmpeg_utils::{av_err2str, hashmap_to_avdictionary};
-use crossbeam_channel::{RecvTimeoutError, SendError, Sender};
+use crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender};
 use ffmpeg_next::packet::Mut;
 use ffmpeg_next::{Frame, Packet};
 use ffmpeg_sys_next::AVCodecID::{
@@ -129,129 +129,15 @@ pub(crate) fn enc_init(
         let mut audio_frame_queue: VecDeque<FrameBox> = VecDeque::new();
 
         loop {
-            let result = receiver.recv_timeout(Duration::from_millis(100));
+            let sync_frame = receive_frame(&mut opened, &receiver, &frame_pool, enc_ctx_box.as_mut_ptr(), stream_box.inner,
+                                               &ready_sender, &bits_per_raw_sample, &mut frame_samples, &mut align_mask, &mut samples_queued, &mut audio_frame_queue,
+                                               &mut samples_sent, &mut frames_sent,
+                                               &scheduler_status, &scheduler_result);
 
-            if wait_until_not_paused(&scheduler_status) == STATUS_END {
-                info!("Encoder receiver end command, finishing.");
-                break;
-            }
-
-            if let Err(e) = result {
-                if e == RecvTimeoutError::Disconnected {
-                    debug!("Source[decoder/filtergraph/pipeline] thread exit.");
-                    break;
-                }
-                continue;
-            }
-
-            let mut frame_box = result.unwrap();
-
-            if !opened {
-                if frame_box.frame.as_mut_ptr().is_null() {
-                    frame_pool.release(frame_box.frame);
-                    error!("Receive frame is null on open encoder");
-                    break;
-                }
-                if let Err(e) = enc_open(
-                    enc_ctx_box.as_mut_ptr(),
-                    stream_box.inner,
-                    &mut frame_box,
-                    ready_sender.clone(),
-                    bits_per_raw_sample,
-                ) {
-                    frame_pool.release(frame_box.frame);
-                    error!("Open encoder error: {e}");
-                    set_scheduler_error(&scheduler_status, &scheduler_result, e);
-                    break;
-                }
-                opened = true;
-
-                if (*enc_ctx_box.as_mut_ptr()).codec_type == AVMEDIA_TYPE_AUDIO {
-                    frame_samples = (*enc_ctx_box.as_mut_ptr()).frame_size;
-                    align_mask = av_cpu_max_align() - 1;
-                    (*enc_ctx_box.as_mut_ptr()).frame_size;
-                }
-            }
-
-            let mut receive_frame_box =
-                if frame_samples > 0 {
-                    finished = frame_is_null(&frame_box.frame);
-                    if finished {
-                        trace!("Receive audio frame is null, finishing.");
-                    }
-
-                    if !finished {
-                        // make sure frame duration is consistent with sample count
-                        (*frame_box.frame.as_mut_ptr()).duration = av_rescale_q(
-                            (*frame_box.frame.as_ptr()).nb_samples as i64,
-                            AVRational {
-                                num: 1,
-                                den: (*frame_box.frame.as_ptr()).sample_rate,
-                            },
-                            (*frame_box.frame.as_ptr()).time_base,
-                        );
-
-                        samples_queued += (*frame_box.frame.as_ptr()).nb_samples;
-                    }
-                    audio_frame_queue.push_back(frame_box);
-
-                    if frame_samples > samples_queued && !finished {
-                        continue;
-                    }
-
-                    let nb_samples = if finished {
-                        std::cmp::min(frame_samples, samples_queued)
-                    } else {
-                        frame_samples
-                    };
-
-                    samples_sent += nb_samples as i64;
-                    frames_sent = samples_sent / frame_samples as i64;
-
-                    let peek = audio_frame_queue.get(0).unwrap();
-
-                    if frame_is_null(&peek.frame) {
-                        audio_frame_queue.pop_front().unwrap()
-                    } else {
-                        if nb_samples != (*peek.frame.as_ptr()).nb_samples
-                            || !frame_is_aligned(align_mask, peek.frame.as_ptr())
-                        {
-                            let result = receive_samples(
-                                &mut samples_queued,
-                                &mut audio_frame_queue,
-                                nb_samples,
-                                &frame_pool,
-                                align_mask,
-                            );
-                            if let Err(ret) = result {
-                                error!("Error receive audio frame: {}", av_err2str(ret));
-                                set_scheduler_error(
-                                    &scheduler_status,
-                                    &scheduler_result,
-                                    Encoding(EncodingOperationError::ReceiveAudioError(
-                                        crate::error::EncodingError::from(ret),
-                                    )),
-                                );
-                                break;
-                            }
-                            result.unwrap()
-                        } else {
-                            samples_queued -= (*peek.frame.as_ptr()).nb_samples;
-                            audio_frame_queue.pop_front().unwrap()
-                        }
-                    }
-                } else {
-                    frames_sent += 1;
-                    frame_box
-                };
-
-            let audio_flush = if finished
-                && (*enc_ctx_box.as_mut_ptr()).codec_type == AVMEDIA_TYPE_AUDIO
-                && !frame_is_null(&receive_frame_box.frame)
-            {
-                true
-            } else {
-                false
+            let mut receive_frame_box = match sync_frame {
+                SyncFrame::FrameBox(frame_box) => frame_box,
+                SyncFrame::Continue => continue,
+                SyncFrame::Break => break
             };
 
             let result = frame_encode(
@@ -283,25 +169,6 @@ pub(crate) fn enc_init(
             finished = result.unwrap();
             if finished {
                 trace!("Encoder returned EOF, finishing");
-                break;
-            }
-
-            if audio_flush {
-                let result = frame_encode(
-                    enc_ctx_box.as_mut_ptr(),
-                    null_mut(),
-                    start_time_us,
-                    recording_time_us,
-                    &pkt_sender,
-                    &pre_pkt_sender,
-                    &mux_started,
-                    stream_box.inner,
-                    &packet_pool,
-                );
-                if let Err(e) = result {
-                    error!("Error flush a audio frame: {}", e);
-                    set_scheduler_error(&scheduler_status, &scheduler_result, e);
-                }
                 break;
             }
         }
@@ -340,6 +207,201 @@ pub(crate) fn enc_init(
     }
 
     Ok(())
+}
+
+enum SyncFrame {
+    FrameBox(FrameBox),
+    Continue,
+    Break,
+}
+
+fn receive_from(
+    receiver: &Receiver<FrameBox>,
+    scheduler_status: &Arc<AtomicUsize>,
+) -> Result<FrameBox, SyncFrame> {
+    if wait_until_not_paused(scheduler_status) == STATUS_END {
+        info!("Encoder receiver end command, finishing.");
+        return Err(SyncFrame::Break);
+    }
+    match receiver.recv_timeout(Duration::from_millis(100)) {
+        Ok(frame_box) => Ok(frame_box),
+        Err(e) if e == RecvTimeoutError::Disconnected => {
+            debug!("Source[decoder/filtergraph/pipeline] thread exit.");
+            Err(SyncFrame::Break)
+        }
+        Err(_) => Err(SyncFrame::Continue),
+    }
+}
+
+fn process_audio_queue(
+    frame_samples: i32,
+    samples_queued: &mut i32,
+    audio_frame_queue: &mut VecDeque<FrameBox>,
+    frame_pool: &ObjPool<Frame>,
+    align_mask: usize,
+    samples_sent: &mut i64,
+    frames_sent: &mut i64,
+    scheduler_status: &Arc<AtomicUsize>,
+    scheduler_result: &Arc<Mutex<Option<crate::error::Result<()>>>>
+) -> Result<Option<FrameBox>, ()> {
+    if let Some(peek) = audio_frame_queue.front() {
+        let is_null = frame_is_null(&peek.frame);
+        if frame_samples <= *samples_queued || is_null {
+            let nb_samples = if is_null {
+                std::cmp::min(frame_samples, *samples_queued)
+            } else {
+                frame_samples
+            };
+            *samples_sent += nb_samples as i64;
+            *frames_sent = *samples_sent / frame_samples as i64;
+
+            if is_null {
+                return Ok(audio_frame_queue.pop_front());
+            } else {
+                unsafe {
+                    if nb_samples != (*peek.frame.as_ptr()).nb_samples
+                        || !frame_is_aligned(align_mask, peek.frame.as_ptr())
+                    {
+                        match receive_samples(
+                            samples_queued,
+                            audio_frame_queue,
+                            nb_samples,
+                            frame_pool,
+                            align_mask,
+                        ) {
+                            Err(ret) => {
+                                error!("Error receive audio frame: {}", av_err2str(ret));
+                                set_scheduler_error(
+                                    scheduler_status,
+                                    scheduler_result,
+                                    Encoding(EncodingOperationError::ReceiveAudioError(
+                                        crate::error::EncodingError::from(ret),
+                                    )),
+                                );
+                                return Err(());
+                            }
+                            Ok(frame) => return Ok(Some(frame)),
+                        }
+                    } else {
+                        *samples_queued -= (*peek.frame.as_ptr()).nb_samples;
+                        return Ok(audio_frame_queue.pop_front());
+                    }
+                }
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn receive_frame(
+    opened: &mut bool,
+    receiver: &Receiver<FrameBox>,
+    frame_pool: &ObjPool<Frame>,
+    enc_ctx: *mut AVCodecContext,
+    stream: *mut AVStream,
+    ready_sender: &Option<Sender<i32>>,
+    bits_per_raw_sample: &Option<i32>,
+    frame_samples: &mut i32,
+    align_mask: &mut usize,
+    samples_queued: &mut i32,
+    audio_frame_queue: &mut VecDeque<FrameBox>,
+    samples_sent: &mut i64,
+    frames_sent: &mut i64,
+    scheduler_status: &Arc<AtomicUsize>,
+    scheduler_result: &Arc<Mutex<Option<crate::error::Result<()>>>>
+) -> SyncFrame {
+    let mut frame_box = if !*opened {
+        let mut frame_box = match receive_from(receiver, scheduler_status) {
+            Ok(frame) => frame,
+            Err(sync) => return sync,
+        };
+
+        if frame_is_null(&frame_box.frame) {
+            frame_pool.release(frame_box.frame);
+            error!("Receive frame is null on open encoder");
+            return SyncFrame::Break;
+        }
+        if let Err(e) = enc_open(enc_ctx, stream, &mut frame_box, ready_sender.clone(), bits_per_raw_sample.clone()) {
+            frame_pool.release(frame_box.frame);
+            error!("Open encoder error: {e}");
+            set_scheduler_error(scheduler_status, scheduler_result, e);
+            return SyncFrame::Break;
+        }
+        *opened = true;
+        unsafe {
+            if (*enc_ctx).codec_type == AVMEDIA_TYPE_AUDIO {
+                *frame_samples = (*enc_ctx).frame_size;
+                *align_mask = av_cpu_max_align() - 1;
+            }
+        }
+
+        frame_box
+    } else {
+        if *frame_samples > 0 && !audio_frame_queue.is_empty() {
+            match process_audio_queue(
+                *frame_samples,
+                samples_queued,
+                audio_frame_queue,
+                frame_pool,
+                *align_mask,
+                samples_sent,
+                frames_sent,
+                scheduler_status,
+                scheduler_result,
+            ) {
+                Ok(Some(frame)) => return SyncFrame::FrameBox(frame),
+                Err(_) => return SyncFrame::Break,
+                _ => {}
+            }
+        }
+
+        let frame_box = match receive_from(receiver, scheduler_status) {
+            Ok(frame) => frame,
+            Err(sync) => return sync,
+        };
+
+        frame_box
+    };
+
+    if *frame_samples > 0 {
+        let is_null = frame_is_null(&frame_box.frame);
+        if !is_null {
+            unsafe {
+                (*frame_box.frame.as_mut_ptr()).duration = av_rescale_q(
+                    (*frame_box.frame.as_ptr()).nb_samples as i64,
+                    AVRational {
+                        num: 1,
+                        den: (*frame_box.frame.as_ptr()).sample_rate,
+                    },
+                    (*frame_box.frame.as_ptr()).time_base,
+                );
+                *samples_queued += (*frame_box.frame.as_ptr()).nb_samples;
+            }
+        }
+        audio_frame_queue.push_back(frame_box);
+
+        if *samples_queued < *frame_samples && !is_null {
+            return SyncFrame::Continue;
+        }
+        match process_audio_queue(
+            *frame_samples,
+            samples_queued,
+            audio_frame_queue,
+            frame_pool,
+            *align_mask,
+            samples_sent,
+            frames_sent,
+            scheduler_status,
+            &scheduler_result,
+        ) {
+            Ok(Some(frame)) => SyncFrame::FrameBox(frame),
+            Ok(None) => SyncFrame::Continue,
+            Err(_) => SyncFrame::Break,
+        }
+    } else {
+        *frames_sent += 1;
+        SyncFrame::FrameBox(frame_box)
+    }
 }
 
 fn set_encoder_opts(enc_stream: &EncoderStream, video_codec_opts: &Option<HashMap<CString, CString>>, audio_codec_opts: &Option<HashMap<CString, CString>>, subtitle_codec_opts: &Option<HashMap<CString, CString>>, enc_ctx_box: &CodecContext) -> crate::error::Result<()> {

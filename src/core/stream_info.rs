@@ -284,7 +284,11 @@ pub fn find_video_stream_info(url: &str) -> Result<Option<StreamInfo>> {
         let bit_rate = (*codec_parameters).bit_rate;
         let pixel_format = (*codec_parameters).format;
         let video_delay = (*codec_parameters).video_delay;
-        let fps = avg_frame_rate.num as f64 / avg_frame_rate.den as f64;
+        let fps = if avg_frame_rate.den == 0 {
+            0.0
+        } else {
+            avg_frame_rate.num as f64 / avg_frame_rate.den as f64
+        };
 
         // Fetch the rotation info from metadata (if present)
         let rotate = metadata
@@ -729,7 +733,11 @@ pub fn find_all_stream_infos(url: &str) -> Result<Vec<StreamInfo>> {
                     let video_delay = (*codec_parameters).video_delay;
                     let r_frame_rate = (*stream).r_frame_rate;
                     let sample_aspect_ratio = (*stream).sample_aspect_ratio;
-                    let fps = avg_frame_rate.num as f64 / avg_frame_rate.den as f64;
+                    let fps = if avg_frame_rate.den == 0 {
+                        0.0
+                    } else {
+                        avg_frame_rate.num as f64 / avg_frame_rate.den as f64
+                    };
 
                     // Fetch the rotation info from metadata (if present)
                     let rotate = metadata

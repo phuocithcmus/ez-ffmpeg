@@ -2358,7 +2358,7 @@ mod tests {
                 avfilter_inout_free(&mut inputs);
                 avfilter_inout_free(&mut outputs);
                 avfilter_graph_free(&mut graph);
-                println!("err ret:{}", av_err2str(ret));
+                println!("err ret:{}", crate::util::ffmpeg_utils::av_err2str(ret));
                 return;
             }
 

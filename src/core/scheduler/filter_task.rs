@@ -1672,7 +1672,7 @@ unsafe fn video_sync_process(
         if delta0 < -0.6 {
             debug!("Past duration {:.2} too large", -delta0);
         } else {
-            debug!("Clipping frame in rate conversion by {:.2}", -delta0);
+            debug!("Clipping frame in rate conversion by {:.6}", -delta0);
         }
         sync_ipts = ofp.next_pts as f64;
         duration += delta0;
@@ -1685,7 +1685,7 @@ unsafe fn video_sync_process(
                 log::debug!("Not duplicating {} initial frames", delta0 as i32);
                 // delta = duration;
                 // delta0 = 0.0;
-                ofp.next_pts = sync_ipts as i64;
+                ofp.next_pts = sync_ipts.round() as i64;
             }
         }
         VSyncMethod::VsyncCfr => {
@@ -1703,12 +1703,12 @@ unsafe fn video_sync_process(
             if delta <= -0.6 {
                 *nb_frames = 0;
             } else if delta > 0.6 {
-                ofp.next_pts = sync_ipts as i64;
+                ofp.next_pts = sync_ipts.round() as i64;
             }
             (*frame).duration = duration.round() as i64;
         }
         VSyncMethod::VsyncPassthrough => {
-            ofp.next_pts = sync_ipts as i64;
+            ofp.next_pts = sync_ipts.round() as i64;
             (*frame).duration = duration.round() as i64;
         }
         _ => {}
