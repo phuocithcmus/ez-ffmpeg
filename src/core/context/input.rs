@@ -156,6 +156,19 @@ pub struct Input {
     /// If `None`, no processing pipeline is applied to the decoded frames.
     pub(crate) frame_pipelines: Option<Vec<FramePipeline>>,
 
+    /// The input format for the source.
+    ///
+    /// This field specifies which container or device format FFmpeg should use to read the input.
+    /// If `None`, FFmpeg will attempt to automatically detect the format based on the source URL,
+    /// file extension, or stream data.
+    ///
+    /// You might need to specify a format explicitly in cases where automatic detection fails or
+    /// when you must force a particular format. For example:
+    /// - When capturing from a specific device on macOS (using `avfoundation`).
+    /// - When capturing on Windows devices (using `dshow`).
+    /// - When dealing with raw streams or unusual data sources.
+    pub(crate) format: Option<String>,
+
     /// The codec to be used for **video** decoding.
     ///
     /// If set, this forces FFmpeg to use the specified video codec for decoding.
@@ -194,25 +207,18 @@ pub struct Input {
     /// select output format used with HW accelerated decoding
     pub(crate) hwaccel_output_format: Option<String>,
 
-    /// The input format options.
+    /// The input format options for the demuxer.
     ///
-    /// This field stores additional input-specific options that can be passed to the FFmpeg demuxer.
-    /// It is a collection of key-value pairs that modify the behavior of the input format.
+    /// This field stores additional format-specific options that are passed to the FFmpeg demuxer.
+    /// It is a collection of key-value pairs that can modify the behavior of the input format.
     ///
-    /// **Example Usage:**
-    /// ```rust
-    /// let input = Input::from("rtsp://example.com/stream")
-    ///     .set_input_opt("rtsp_transport", "tcp")
-    ///     .set_input_opt("timeout", "5000000"); // 5 seconds timeout
-    /// ```
+    /// **Common examples** might include:
+    /// - `framerate=30` (for device inputs like `avfoundation`).
+    /// - `probesize` or `analyzeduration` (for adjusting how FFmpeg probes input data).
     ///
-    /// ### Common Input Options:
-    /// | Format | Option | Description |
-    /// |--------|--------|-------------|
-    /// | `rtsp` | `rtsp_transport=tcp` | Forces RTSP to use TCP instead of UDP |
-    /// | `rtmp` | `buffer_size=1024000` | Sets RTMP buffer size |
-    /// | `udp`  | `fifo_size=1000000` | Sets FIFO buffer size |
-    pub(crate) input_opts: Option<HashMap<String, String>>,
+    /// These options are used when initializing the FFmpeg input format, allowing you to
+    /// fine-tune or override default demuxer behavior.
+    pub(crate) format_opts: Option<HashMap<String, String>>,
 }
 
 impl Input {
@@ -443,6 +449,24 @@ impl Input {
                 .unwrap()
                 .push(frame_pipeline.into());
         }
+        self
+    }
+
+    /// Sets the input format for the container or device.
+    ///
+    /// By default, if no format is specified,
+    /// FFmpeg will attempt to detect the format automatically. However, certain
+    /// use cases require specifying the format explicitly:
+    /// - Using device-specific inputs (e.g., `avfoundation` on macOS, `dshow` on Windows).
+    /// - Handling raw streams or formats that FFmpeg may not detect automatically.
+    ///
+    /// ### Parameters:
+    /// - `format`: A string specifying the desired input format (e.g., `mp4`, `flv`, `avfoundation`).
+    ///
+    /// ### Return Value:
+    /// - Returns the `Input` instance with the newly set format.
+    pub fn set_format(mut self, format: impl Into<String>) -> Self {
+        self.format = Some(format.into());
         self
     }
 
@@ -734,69 +758,65 @@ impl Input {
         self
     }
 
-    /// Sets an input-specific option.
+    /// Sets a single input format-specific option.
     ///
-    /// FFmpeg supports various input-specific options that can be passed to the demuxer.
-    /// These options allow fine-tuning of how the input stream is processed.
+    /// This method allows you to configure a single key-value pair that will be passed
+    /// to the FFmpeg demuxer. If the same key already exists, it will be overwritten.
     ///
     /// **Example Usage:**
     /// ```rust
-    /// let input = Input::new("rtsp://example.com/stream")
-    ///     .set_input_opt("rtsp_transport", "tcp")
-    ///     .set_input_opt("buffer_size", "1024000");
+    /// let input = Input::new("avfoundation:0")
+    ///     .set_format_opt("framerate", "30");
     /// ```
     ///
-    /// ### Common Input Options:
-    /// | Format | Option | Description |
-    /// |--------|--------|-------------|
-    /// | `rtsp` | `rtsp_transport=tcp` | Forces RTSP to use TCP instead of UDP |
-    /// | `udp`  | `fifo_size=1000000` | Sets FIFO buffer size |
-    /// | `rtmp` | `buffer_size=1024000` | Sets RTMP buffer size |
+    /// ### Parameters:
+    /// - `key`: The format option name (e.g., `"framerate"`, `"probesize"`).
+    /// - `value`: The value to set (e.g., `"30"`, `"5000000"`).
     ///
-    /// **Parameters:**
-    /// - `key`: The input option name (e.g., `"rtsp_transport"`, `"buffer_size"`).
-    /// - `value`: The value to set (e.g., `"tcp"`, `"1024000"`).
-    ///
-    /// Returns the modified `Input` struct for chaining.
-    pub fn set_input_opt(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        if let Some(ref mut opts) = self.input_opts {
+    /// ### Return Value:
+    /// - Returns the modified `Input` instance for chaining.
+    pub fn set_format_opt(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        if let Some(ref mut opts) = self.format_opts {
             opts.insert(key.into(), value.into());
         } else {
             let mut opts = HashMap::new();
             opts.insert(key.into(), value.into());
-            self.input_opts = Some(opts);
+            self.format_opts = Some(opts);
         }
         self
     }
 
-    /// Sets multiple input-specific options at once.
+    /// Sets multiple input format-specific options at once.
     ///
-    /// This method allows setting multiple input options in a single call.
+    /// This method allows setting multiple key-value pairs in a single call.
+    /// Each provided key-value pair will be inserted into the `format_opts` map,
+    /// overwriting any existing keys with the same name.
     ///
     /// **Example Usage:**
     /// ```rust
-    /// let input = Input::new("rtsp://example.com/stream")
-    ///     .set_input_opts(vec![
-    ///         ("rtsp_transport", "tcp"),
-    ///         ("timeout", "5000000")
+    /// let input = Input::new("avfoundation:0")
+    ///     .set_format_opts(vec![
+    ///         ("framerate", "30"),
+    ///         ("video_size", "1280x720"),
     ///     ]);
     /// ```
     ///
-    /// **Parameters:**
-    /// - `opts`: A vector of key-value pairs representing input options.
+    /// ### Parameters:
+    /// - `opts`: A vector of key-value pairs representing demuxer options.
     ///
-    /// Returns the modified `Input` struct for chaining.
-    pub fn set_input_opts(mut self, opts: Vec<(impl Into<String>, impl Into<String>)>) -> Self {
-        if let Some(ref mut input_opts) = self.input_opts {
+    /// ### Return Value:
+    /// - Returns the modified `Input` instance for chaining.
+    pub fn set_format_opts(mut self, opts: Vec<(impl Into<String>, impl Into<String>)>) -> Self {
+        if let Some(ref mut format_opts) = self.format_opts {
             for (key, value) in opts {
-                input_opts.insert(key.into(), value.into());
+                format_opts.insert(key.into(), value.into());
             }
         } else {
-            let mut input_opts = HashMap::new();
+            let mut format_opts = HashMap::new();
             for (key, value) in opts {
-                input_opts.insert(key.into(), value.into());
+                format_opts.insert(key.into(), value.into());
             }
-            self.input_opts = Some(input_opts);
+            self.format_opts = Some(format_opts);
         }
         self
     }
@@ -810,6 +830,7 @@ impl From<Box<dyn FnMut(&mut [u8]) -> i32>> for Input {
             read_callback: Some(read_callback),
             seek_callback: None,
             frame_pipelines: None,
+            format: None,
             video_codec: None,
             audio_codec: None,
             subtitle_codec: None,
@@ -822,7 +843,7 @@ impl From<Box<dyn FnMut(&mut [u8]) -> i32>> for Input {
             hwaccel: None,
             hwaccel_device: None,
             hwaccel_output_format: None,
-            input_opts: None,
+            format_opts: None,
         }
     }
 }
@@ -834,6 +855,7 @@ impl From<String> for Input {
             read_callback: None,
             seek_callback: None,
             frame_pipelines: None,
+            format: None,
             video_codec: None,
             audio_codec: None,
             subtitle_codec: None,
@@ -846,7 +868,7 @@ impl From<String> for Input {
             hwaccel: None,
             hwaccel_device: None,
             hwaccel_output_format: None,
-            input_opts: None,
+            format_opts: None,
         }
     }
 }

@@ -134,8 +134,6 @@ impl FfmpegScheduler<Initialization> {
     /// // Now it's in Running state, you can wait or pause/abort, etc.
     /// ```
     pub fn start(mut self) -> crate::error::Result<FfmpegScheduler<Running>> {
-        crate::core::initialize_ffmpeg();
-
         let packet_pool = ObjPool::new(64, new_packet, unref_packet, packet_is_null)?;
         let frame_pool = ObjPool::new(64, new_frame, unref_frame, frame_is_null)?;
         let scheduler_status = self.status.clone();

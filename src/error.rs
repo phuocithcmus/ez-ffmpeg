@@ -382,6 +382,9 @@ pub enum OpenInputError {
     #[error("Invalid source provided")]
     InvalidSource,
 
+    #[error("Invalid source format:{0}")]
+    InvalidFormat(String),
+
     #[error("No seek callback is provided")]
     SeekFunctionMissing,
 }

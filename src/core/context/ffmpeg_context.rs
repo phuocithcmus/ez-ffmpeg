@@ -123,6 +123,8 @@ impl FfmpegContext {
     ) -> Result<FfmpegContext> {
         check_duplicate_inputs_outputs(&inputs, &outputs)?;
 
+        crate::core::initialize_ffmpeg();
+
         let mut demuxs = open_input_files(&mut inputs)?;
 
         if demuxs.len() <= 1 {
@@ -2098,8 +2100,8 @@ unsafe fn open_input_file(
 ) -> Result<Demuxer> {
     let mut in_fmt_ctx = null_mut();
 
-    let input_opts = convert_options(input.input_opts.clone())?;
-    let mut input_opts = hashmap_to_avdictionary(&input_opts);
+    let format_opts = convert_options(input.format_opts.clone())?;
+    let mut format_opts = hashmap_to_avdictionary(&format_opts);
 
     let recording_time_us = match input.stop_time_us {
         None => input.recording_time_us,
@@ -2112,6 +2114,19 @@ unsafe fn open_input_file(
                 Some(stop_time_us - start_time_us)
             }
         }
+    };
+
+    let file_iformat = if let Some(format) = &input.format {
+        let format_cstr = CString::new(format.clone())?;
+
+        let file_iformat = ffmpeg_sys_next::av_find_input_format(format_cstr.as_ptr());
+        if file_iformat.is_null() {
+            error!("Unknown input format: '{format}'");
+            return Err(OpenInputError::InvalidFormat(format.clone()).into());
+        }
+        file_iformat
+    } else {
+        null()
     };
 
     match &input.url {
@@ -2162,7 +2177,7 @@ unsafe fn open_input_file(
             (*in_fmt_ctx).pb = avio_ctx;
             (*in_fmt_ctx).flags = AVFMT_FLAG_CUSTOM_IO;
 
-            let ret = avformat_open_input(&mut in_fmt_ctx, null(), null(), &mut input_opts);
+            let ret = avformat_open_input(&mut in_fmt_ctx, null(), file_iformat, &mut format_opts);
             if ret < 0 {
                 av_freep(&mut (*avio_ctx).buffer as *mut _ as *mut c_void);
                 avio_context_free(&mut avio_ctx);
@@ -2190,7 +2205,7 @@ unsafe fn open_input_file(
             let url_cstr = CString::new(url.as_str())?;
 
             let mut ret =
-                avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), &mut input_opts);
+                avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), file_iformat, &mut format_opts);
             if ret < 0 {
                 avformat_close_input(&mut in_fmt_ctx);
                 return Err(OpenInputError::from(ret).into());
