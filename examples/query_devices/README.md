@@ -1,4 +1,4 @@
-# ez-ffmpeg Example: Query Devices Example
+# ez-ffmpeg Example: Query Devices
 
 This example demonstrates how to query and list the available input devices for audio and video. It utilizes the `get_input_audio_devices` and `get_input_video_devices` functions from the `ez-ffmpeg` crate to fetch all the supported input devices for capturing audio (e.g., microphones) and video (e.g., cameras).
 
