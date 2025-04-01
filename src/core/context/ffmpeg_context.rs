@@ -40,7 +40,7 @@ use ffmpeg_sys_next::AVMediaType::{
 };
 use ffmpeg_sys_next::AVPixelFormat::AV_PIX_FMT_NONE;
 use ffmpeg_sys_next::AVSampleFormat::AV_SAMPLE_FMT_NONE;
-use ffmpeg_sys_next::{av_add_q, av_codec_get_id, av_codec_get_tag2, av_freep, av_get_exact_bits_per_sample, av_guess_codec, av_guess_format, av_guess_frame_rate, av_inv_q, av_malloc, av_rescale_q, av_seek_frame, avcodec_alloc_context3, avcodec_descriptor_get_by_name, avcodec_find_encoder, avcodec_find_encoder_by_name, avcodec_get_name, avcodec_parameters_from_context, avcodec_parameters_to_context, avfilter_graph_alloc, avfilter_graph_free, avfilter_inout_free, avfilter_pad_get_name, avfilter_pad_get_type, avformat_alloc_context, avformat_alloc_output_context2, avformat_close_input, avformat_find_stream_info, avformat_flush, avformat_free_context, avformat_open_input, avio_alloc_context, avio_context_free, avio_open, AVCodec, AVCodecID, AVColorRange, AVColorSpace, AVFilterContext, AVFilterInOut, AVFilterPad, AVFormatContext, AVMediaType, AVOutputFormat, AVPixelFormat, AVRational, AVSampleFormat, AVStream, AVERROR_ENCODER_NOT_FOUND, AVFMT_FLAG_CUSTOM_IO, AVFMT_GLOBALHEADER, AVFMT_NOBINSEARCH, AVFMT_NOFILE, AVFMT_NOGENSEARCH, AVFMT_NOSTREAMS, AVIO_FLAG_WRITE, AVSEEK_FLAG_BACKWARD, AV_TIME_BASE};
+use ffmpeg_sys_next::{av_add_q, av_codec_get_id, av_codec_get_tag2, av_dict_free, av_freep, av_get_exact_bits_per_sample, av_guess_codec, av_guess_format, av_guess_frame_rate, av_inv_q, av_malloc, av_rescale_q, av_seek_frame, avcodec_alloc_context3, avcodec_descriptor_get_by_name, avcodec_find_encoder, avcodec_find_encoder_by_name, avcodec_get_name, avcodec_parameters_from_context, avcodec_parameters_to_context, avfilter_graph_alloc, avfilter_graph_free, avfilter_inout_free, avfilter_pad_get_name, avfilter_pad_get_type, avformat_alloc_context, avformat_alloc_output_context2, avformat_close_input, avformat_find_stream_info, avformat_flush, avformat_free_context, avformat_open_input, avio_alloc_context, avio_context_free, avio_open, AVCodec, AVCodecID, AVColorRange, AVColorSpace, AVFilterContext, AVFilterInOut, AVFilterPad, AVFormatContext, AVMediaType, AVOutputFormat, AVPixelFormat, AVRational, AVSampleFormat, AVStream, AVERROR_ENCODER_NOT_FOUND, AVFMT_FLAG_CUSTOM_IO, AVFMT_GLOBALHEADER, AVFMT_NOBINSEARCH, AVFMT_NOFILE, AVFMT_NOGENSEARCH, AVFMT_NOSTREAMS, AVIO_FLAG_WRITE, AVSEEK_FLAG_BACKWARD, AV_TIME_BASE};
 #[cfg(not(feature = "docs-rs"))]
 use ffmpeg_sys_next::{av_channel_layout_copy, av_packet_side_data_new, avcodec_get_supported_config, avfilter_graph_segment_apply, avfilter_graph_segment_create_filters, avfilter_graph_segment_free, avfilter_graph_segment_parse, AVChannelLayout};
 use log::{debug, error, info, warn};
@@ -2098,10 +2098,10 @@ unsafe fn open_input_file(
     index: usize,
     input: &mut Input,
 ) -> Result<Demuxer> {
-    let mut in_fmt_ctx = null_mut();
-
-    let format_opts = convert_options(input.format_opts.clone())?;
-    let mut format_opts = hashmap_to_avdictionary(&format_opts);
+    let mut in_fmt_ctx = avformat_alloc_context();
+    if in_fmt_ctx.is_null() {
+        return Err(OpenInputError::OutOfMemory.into());
+    }
 
     let recording_time_us = match input.stop_time_us {
         None => input.recording_time_us,
@@ -2116,29 +2116,11 @@ unsafe fn open_input_file(
         }
     };
 
-    let file_iformat = if let Some(format) = &input.format {
-        let format_cstr = CString::new(format.clone())?;
-
-        let file_iformat = ffmpeg_sys_next::av_find_input_format(format_cstr.as_ptr());
-        if file_iformat.is_null() {
-            error!("Unknown input format: '{format}'");
-            return Err(OpenInputError::InvalidFormat(format.clone()).into());
-        }
-        file_iformat
-    } else {
-        null()
-    };
-
     match &input.url {
         None => {
             if input.read_callback.is_none() {
                 error!("input url and read_callback is none.");
                 return Err(OpenInputError::InvalidSource.into());
-            }
-
-            in_fmt_ctx = avformat_alloc_context();
-            if in_fmt_ctx.is_null() {
-                return Err(OpenInputError::OutOfMemory.into());
             }
 
             let avio_ctx_buffer_size = 1024 * 64;
@@ -2177,7 +2159,7 @@ unsafe fn open_input_file(
             (*in_fmt_ctx).pb = avio_ctx;
             (*in_fmt_ctx).flags = AVFMT_FLAG_CUSTOM_IO;
 
-            let ret = avformat_open_input(&mut in_fmt_ctx, null(), file_iformat, &mut format_opts);
+            let ret = avformat_open_input(&mut in_fmt_ctx, null(), null(), null_mut());
             if ret < 0 {
                 av_freep(&mut (*avio_ctx).buffer as *mut _ as *mut c_void);
                 avio_context_free(&mut avio_ctx);
@@ -2202,10 +2184,33 @@ unsafe fn open_input_file(
             }
         }
         Some(url) => {
+            let file_iformat = if let Some(format) = &input.format {
+                let format_cstr = CString::new(format.clone())?;
+
+                let file_iformat = ffmpeg_sys_next::av_find_input_format(format_cstr.as_ptr());
+                if file_iformat.is_null() {
+                    error!("Unknown input format: '{format}'");
+                    return Err(OpenInputError::InvalidFormat(format.clone()).into());
+                }
+                file_iformat
+            } else {
+                null()
+            };
+
             let url_cstr = CString::new(url.as_str())?;
+
+            let format_opts = convert_options(input.format_opts.clone())?;
+            let mut format_opts = hashmap_to_avdictionary(&format_opts);
+            let scan_all_pmts_key = CString::new("scan_all_pmts")?;
+            if ffmpeg_sys_next::av_dict_get(format_opts, scan_all_pmts_key.as_ptr(), null(), ffmpeg_sys_next::AV_DICT_MATCH_CASE).is_null() {
+                let scan_all_pmts_value = CString::new("1")?;
+                ffmpeg_sys_next::av_dict_set(&mut format_opts, scan_all_pmts_key.as_ptr(), scan_all_pmts_value.as_ptr(), ffmpeg_sys_next::AV_DICT_DONT_OVERWRITE);
+            };
+            (*in_fmt_ctx).flags |= ffmpeg_sys_next::AVFMT_FLAG_NONBLOCK;
 
             let mut ret =
                 avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), file_iformat, &mut format_opts);
+            av_dict_free(&mut format_opts);
             if ret < 0 {
                 avformat_close_input(&mut in_fmt_ctx);
                 return Err(OpenInputError::from(ret).into());
@@ -2219,9 +2224,15 @@ unsafe fn open_input_file(
         }
     }
 
+    let mut timestamp = input.start_time_us.unwrap_or(0);
+    /* add the stream start time */
+    if (*in_fmt_ctx).start_time != ffmpeg_sys_next::AV_NOPTS_VALUE {
+        timestamp += (*in_fmt_ctx).start_time;
+    }
+
     /* if seeking requested, we execute it */
     if let Some(start_time_us) = input.start_time_us {
-        let mut seek_timestamp = start_time_us;
+        let mut seek_timestamp = timestamp;
         /* add the stream start time */
         if (*in_fmt_ctx).start_time != ffmpeg_sys_next::AV_NOPTS_VALUE {
             seek_timestamp += (*in_fmt_ctx).start_time;
@@ -2254,11 +2265,12 @@ unsafe fn open_input_file(
         .clone()
         .unwrap_or_else(|| format!("read_callback[{index}]"));
 
+
     let demux = Demuxer::new(
         url,
         input.url.is_none(),
         in_fmt_ctx,
-        0 - input.start_time_us.unwrap_or(0),
+        0 - timestamp,
         input.frame_pipelines.take(),
         input.video_codec.clone(),
         input.audio_codec.clone(),
