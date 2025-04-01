@@ -24,7 +24,7 @@ pub trait FrameFilter: Send {
     /// - `Ok(())` if initialization succeeds.
     /// - `Err(String)` if there is an error during initialization.
     fn init(&mut self, ctx: &FrameFilterContext) -> Result<(), String> {
-        log::debug!("Initializing filter:{}", ctx.name);
+        log::debug!("Initializing filter:{}", ctx.name());
         Ok(())
     }
 
@@ -79,16 +79,25 @@ pub trait FrameFilter: Send {
     /// # Parameters
     /// - `ctx`: The context that provides metadata and dynamic modification capabilities.
     fn uninit(&mut self, ctx: &FrameFilterContext) {
-        log::debug!("Uninitialized filter:{}", ctx.name);
+        log::debug!("Uninitialized filter:{}", ctx.name());
     }
 }
 
 
 
-pub(crate) struct NoopFilter {}
+pub struct NoopFilter {
+    media_type: AVMediaType
+}
+
+impl NoopFilter {
+    pub fn new(media_type: AVMediaType) -> Self {
+        Self { media_type }
+    }
+}
+
 impl FrameFilter for NoopFilter {
     fn media_type(&self) -> AVMediaType {
-        AVMediaType::AVMEDIA_TYPE_UNKNOWN
+        self.media_type
     }
 
     fn filter_frame(&mut self, frame: Frame, _ctx: &FrameFilterContext) -> Result<Option<Frame>, String> {

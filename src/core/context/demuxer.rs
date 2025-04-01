@@ -1,10 +1,10 @@
 use crate::core::codec::Codec;
 use crate::core::context::decoder_stream::DecoderStream;
-use crate::core::context::{type_to_linklabel, PacketBox};
-use crate::core::filter::frame_pipeline_builder::FramePipelineBuilder;
+use crate::core::context::PacketBox;
 use crate::core::hwaccel::HWAccelID;
 use crate::core::scheduler::input_controller::SchNode;
 use crate::error::{DecoderError, OpenInputError};
+use crate::filter::frame_pipeline::FramePipeline;
 use crossbeam_channel::Sender;
 use ffmpeg_sys_next::AVHWDeviceType::AV_HWDEVICE_TYPE_NONE;
 use ffmpeg_sys_next::AVMediaType::{AVMEDIA_TYPE_AUDIO, AVMEDIA_TYPE_SUBTITLE, AVMEDIA_TYPE_VIDEO};
@@ -28,7 +28,7 @@ pub(crate) struct Demuxer {
     pub(crate) is_set_read_callback: bool,
     pub(crate) in_fmt_ctx: *mut AVFormatContext,
     pub(crate) ts_offset: i64,
-    pub(crate) frame_pipelines: Option<Vec<FramePipelineBuilder>>,
+    pub(crate) frame_pipelines: Option<Vec<FramePipeline>>,
 
     pub(crate) readrate: Option<f32>,
     pub(crate) start_time_us: Option<i64>,
@@ -49,12 +49,11 @@ unsafe impl Sync for Demuxer {}
 
 impl Demuxer {
     pub(crate) fn new(
-        index: usize,
         url: String,
         is_set_read_callback: bool,
         in_fmt_ctx: *mut AVFormatContext,
         ts_offset: i64,
-        frame_pipelines: Option<Vec<FramePipelineBuilder>>,
+        frame_pipelines: Option<Vec<FramePipeline>>,
         video_codec: Option<String>,
         audio_codec: Option<String>,
         subtitle_codec: Option<String>,
@@ -68,7 +67,6 @@ impl Demuxer {
         hwaccel_output_format: Option<String>,
     ) -> crate::error::Result<Self> {
         let streams = Self::init_streams(
-            index,
             in_fmt_ctx,
             video_codec,
             audio_codec,
@@ -98,7 +96,6 @@ impl Demuxer {
     }
 
     fn init_streams(
-        demux_index: usize,
         mut fmt_ctx: *mut AVFormatContext,
         video_codec: Option<String>,
         audio_codec: Option<String>,
@@ -146,10 +143,8 @@ impl Demuxer {
                 }
                 let codec_desc = avcodec_descriptor_get(codec_id);
 
-                let linklabel = type_to_linklabel(codec_type, demux_index);
                 let stream = DecoderStream::new(
                     i as usize,
-                    linklabel,
                     st,
                     codec_parameters,
                     codec_type,

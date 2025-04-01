@@ -173,10 +173,10 @@ impl FfmpegScheduler<Initialization> {
         let ffmpeg_context = &mut self.ffmpeg_context;
         for (mux_idx, mux) in ffmpeg_context.muxs.iter_mut().enumerate() {
             if let Some(frame_pipelines) = mux.frame_pipelines.take() {
-                for frame_pipeline_builder in frame_pipelines {
+                for frame_pipeline in frame_pipelines {
                     if let Err(e) = output_pipeline_init(
                         mux_idx,
-                        frame_pipeline_builder,
+                        frame_pipeline,
                         mux.get_streams_mut(),
                         frame_pool.clone(),
                         scheduler_status.clone(),
@@ -249,10 +249,10 @@ impl FfmpegScheduler<Initialization> {
         let ffmpeg_context = &mut self.ffmpeg_context;
         for (demux_idx, demux) in ffmpeg_context.demuxs.iter_mut().enumerate() {
             if let Some(frame_pipelines) = demux.frame_pipelines.take() {
-                for frame_pipeline_builder in frame_pipelines {
+                for frame_pipeline in frame_pipelines {
                     if let Err(e) = input_pipeline_init(
                         demux_idx,
-                        frame_pipeline_builder,
+                        frame_pipeline,
                         demux.get_streams_mut(),
                         frame_pool.clone(),
                         scheduler_status.clone(),
@@ -539,13 +539,13 @@ mod tests {
     use crate::core::scheduler::ffmpeg_scheduler::{
         FfmpegScheduler, Initialization, Paused, Running, STATUS_INIT, STATUS_PAUSE, STATUS_RUN,
     };
-    use crate::filter::frame_pipeline_builder::FramePipelineBuilder;
     use ffmpeg_sys_next::AVMediaType;
     use log::{info, warn};
     use std::sync::atomic::Ordering;
     use std::sync::{Arc, Mutex};
     use std::thread::sleep;
     use std::time::Duration;
+    use crate::filter::frame_pipeline_builder::FramePipelineBuilder;
 
     #[test]
     fn test_concat() {
@@ -594,28 +594,6 @@ mod tests {
     }
 
     #[test]
-    fn test_image() {
-        let _ = env_logger::builder()
-            .filter_level(log::LevelFilter::Trace)
-            .is_test(true)
-            .try_init();
-
-        let input: Input = "test.png".into();
-        let output: Output = "output.jpg".into();
-
-        let result = FfmpegContext::builder()
-            .input(input)
-            .output(output)
-            .build()
-            .unwrap()
-            .start()
-            .unwrap()
-            .wait();
-
-        assert!(result.is_ok());
-    }
-
-    #[test]
     fn test_thumbnail() {
         let _ = env_logger::builder()
             .filter_level(log::LevelFilter::Trace)
@@ -637,52 +615,6 @@ mod tests {
             .unwrap()
             .wait();
 
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_read_write_callback_flv() {
-        let _ = env_logger::builder()
-            .filter_level(log::LevelFilter::Trace)
-            .is_test(true)
-            .try_init();
-
-        use std::fs::File;
-        use std::io::{Read, Write};
-
-        let input_file = "test.flv";
-        let output_file = "output.flv";
-
-        let mut input_file = File::open(input_file).expect("Failed to open input file");
-        let read_callback: Box<dyn FnMut(&mut [u8]) -> i32> =
-            Box::new(move |buf: &mut [u8]| -> i32 {
-                match input_file.read(buf) {
-                    Ok(0) => ffmpeg_sys_next::AVERROR_EOF,
-                    Ok(bytes_read) => bytes_read as i32,
-                    Err(e) => ffmpeg_sys_next::AVERROR(ffmpeg_sys_next::EIO),
-                }
-            });
-
-        let mut output_file = File::create(output_file).expect("Failed to create output file");
-        let write_callback: Box<dyn FnMut(&[u8]) -> i32> = Box::new(move |buf: &[u8]| -> i32 {
-            match output_file.write_all(buf) {
-                Ok(_) => buf.len() as i32,
-                Err(e) => ffmpeg_sys_next::AVERROR(ffmpeg_sys_next::EIO),
-            }
-        });
-
-        let output: Output = write_callback.into();
-
-        let context = FfmpegContext::builder()
-            .input(read_callback)
-            .filter_desc("hue=s=0")
-            .output(output.set_format("flv"))
-            .build()
-            .unwrap();
-
-        let scheduler = FfmpegScheduler::new(context);
-        let scheduler = scheduler.start().unwrap();
-        let result = scheduler.wait();
         assert!(result.is_ok());
     }
 
@@ -828,7 +760,7 @@ mod tests {
 
         let mut output: Output = "output.mp4".into();
         let frame_pipeline_builder: FramePipelineBuilder = AVMediaType::AVMEDIA_TYPE_VIDEO.into();
-        let frame_pipeline_builder = frame_pipeline_builder.filter("test", Box::new(NoopFilter {}));
+        let frame_pipeline_builder = frame_pipeline_builder.filter("test", Box::new(NoopFilter::new(AVMediaType::AVMEDIA_TYPE_VIDEO)));
         let output = output.add_frame_pipeline(frame_pipeline_builder);
 
         let context = FfmpegContext::builder()

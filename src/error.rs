@@ -84,6 +84,7 @@ pub enum Error {
     #[error("Demuxing operation failed {0}")]
     Demuxing(#[from] DemuxingOperationError),
 
+    // ---- Frame Filter ----
     #[error("Frame filter init failed: {0}")]
     FrameFilterInit(String),
 
@@ -93,14 +94,11 @@ pub enum Error {
     #[error("Frame filter request failed: {0}")]
     FrameFilterRequest(String),
 
-    #[error("No streams of the type:{0} were found while build frame pipeline")]
-    FrameFilterTypeNoMatched(String),
+    #[error("No {0} stream of the type:{1} were found while build frame pipeline")]
+    FrameFilterTypeNoMatched(String, String),
 
-    #[error("No streams of the linklabel:{0} were found while build frame pipeline")]
-    FrameFilterLinkLabelNoMatched(String),
-
-    #[error("Stream:{0} of the type:{1} were mismatched while build frame pipeline")]
-    FrameFilterStreamTypeNoMatched(usize, String),
+    #[error("{0} stream:{1} of the type:{2} were mismatched while build frame pipeline")]
+    FrameFilterStreamTypeNoMatched(String, usize, String),
 
     #[error("Frame filter pipeline destination already finished")]
     FrameFilterDstFinished,

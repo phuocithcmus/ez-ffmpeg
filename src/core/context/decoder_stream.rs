@@ -10,7 +10,6 @@ use ffmpeg_sys_next::{
 #[derive(Clone)]
 pub(crate) struct DecoderStream {
     pub(crate) stream_index: usize,
-    pub(crate) linklabel: Option<String>,
     pub(crate) stream: Stream,
     pub(crate) codec_parameters: *mut AVCodecParameters,
     pub(crate) codec_type: AVMediaType,
@@ -35,7 +34,6 @@ pub(crate) struct DecoderStream {
 impl DecoderStream {
     pub(crate) fn new(
         stream_index: usize,
-        linklabel: Option<String>,
         stream: *mut AVStream,
         codec_parameters: *mut AVCodecParameters,
         codec_type: AVMediaType,
@@ -51,7 +49,6 @@ impl DecoderStream {
     ) -> Self {
         Self {
             stream_index,
-            linklabel,
             stream: Stream { inner: stream },
             codec_parameters,
             codec_type,

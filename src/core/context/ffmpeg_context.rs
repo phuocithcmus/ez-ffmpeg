@@ -9,12 +9,13 @@ use crate::core::context::output::{Output, StreamMap};
 use crate::core::context::output_filter::{
     OutputFilter, OFILTER_FLAG_AUDIO_24BIT, OFILTER_FLAG_AUTOSCALE, OFILTER_FLAG_DISABLE_CONVERT,
 };
-use crate::core::context::{frame_alloc, type_to_linklabel, CodecContext};
+use crate::core::context::{frame_alloc, CodecContext};
 use crate::core::scheduler::ffmpeg_scheduler;
 use crate::core::scheduler::ffmpeg_scheduler::{FfmpegScheduler, Initialization};
 #[cfg(not(feature = "docs-rs"))]
 use crate::core::scheduler::filter_task::graph_opts_apply;
-use crate::error::Error::{FileSameAsInput, FilterDescUtf8, FilterNameUtf8, FilterZeroOutputs, ParseInteger};
+use crate::core::scheduler::input_controller::SchNode;
+use crate::error::Error::{FileSameAsInput, FilterDescUtf8, FilterNameUtf8, FilterZeroOutputs, FrameFilterStreamTypeNoMatched, FrameFilterTypeNoMatched, ParseInteger};
 use crate::error::FilterGraphParseError::{
     InvalidFileIndexInFg, InvalidFilterSpecifier, OutputUnconnected,
 };
@@ -24,6 +25,7 @@ use crate::error::{
     OpenOutputError,
 };
 use crate::error::{Error, Result};
+use crate::filter::frame_pipeline::FramePipeline;
 use crate::util::ffmpeg_utils::hashmap_to_avdictionary;
 #[cfg(not(feature = "docs-rs"))]
 use ffmpeg_sys_next::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC;
@@ -38,15 +40,14 @@ use ffmpeg_sys_next::AVMediaType::{
 };
 use ffmpeg_sys_next::AVPixelFormat::AV_PIX_FMT_NONE;
 use ffmpeg_sys_next::AVSampleFormat::AV_SAMPLE_FMT_NONE;
+use ffmpeg_sys_next::{av_add_q, av_codec_get_id, av_codec_get_tag2, av_freep, av_get_exact_bits_per_sample, av_guess_codec, av_guess_format, av_guess_frame_rate, av_inv_q, av_malloc, av_rescale_q, av_seek_frame, avcodec_alloc_context3, avcodec_descriptor_get_by_name, avcodec_find_encoder, avcodec_find_encoder_by_name, avcodec_get_name, avcodec_parameters_from_context, avcodec_parameters_to_context, avfilter_graph_alloc, avfilter_graph_free, avfilter_inout_free, avfilter_pad_get_name, avfilter_pad_get_type, avformat_alloc_context, avformat_alloc_output_context2, avformat_close_input, avformat_find_stream_info, avformat_flush, avformat_free_context, avformat_open_input, avio_alloc_context, avio_context_free, avio_open, AVCodec, AVCodecID, AVColorRange, AVColorSpace, AVFilterContext, AVFilterInOut, AVFilterPad, AVFormatContext, AVMediaType, AVOutputFormat, AVPixelFormat, AVRational, AVSampleFormat, AVStream, AVERROR_ENCODER_NOT_FOUND, AVFMT_FLAG_CUSTOM_IO, AVFMT_GLOBALHEADER, AVFMT_NOBINSEARCH, AVFMT_NOFILE, AVFMT_NOGENSEARCH, AVFMT_NOSTREAMS, AVIO_FLAG_WRITE, AVSEEK_FLAG_BACKWARD, AV_TIME_BASE};
 #[cfg(not(feature = "docs-rs"))]
 use ffmpeg_sys_next::{av_channel_layout_copy, av_packet_side_data_new, avcodec_get_supported_config, avfilter_graph_segment_apply, avfilter_graph_segment_create_filters, avfilter_graph_segment_free, avfilter_graph_segment_parse, AVChannelLayout};
-use ffmpeg_sys_next::{av_add_q, av_codec_get_id, av_codec_get_tag2, av_freep, av_get_exact_bits_per_sample, av_guess_codec, av_guess_format, av_guess_frame_rate, av_inv_q, av_malloc, av_rescale_q, av_seek_frame, avcodec_alloc_context3, avcodec_descriptor_get_by_name, avcodec_find_encoder, avcodec_find_encoder_by_name, avcodec_get_name, avcodec_parameters_from_context, avcodec_parameters_to_context, avfilter_graph_alloc, avfilter_graph_free, avfilter_inout_free, avfilter_pad_get_name, avfilter_pad_get_type, avformat_alloc_context, avformat_alloc_output_context2, avformat_close_input, avformat_find_stream_info, avformat_flush, avformat_free_context, avformat_open_input, avio_alloc_context, avio_context_free, avio_open, AVCodec, AVCodecID, AVColorRange, AVColorSpace, AVFilterContext, AVFilterInOut, AVFilterPad, AVFormatContext, AVMediaType, AVOutputFormat, AVPixelFormat, AVRational, AVSampleFormat, AVStream, AVERROR_ENCODER_NOT_FOUND, AVFMT_FLAG_CUSTOM_IO, AVFMT_GLOBALHEADER, AVFMT_NOBINSEARCH, AVFMT_NOFILE, AVFMT_NOGENSEARCH, AVFMT_NOSTREAMS, AVIO_FLAG_WRITE, AVSEEK_FLAG_BACKWARD, AV_TIME_BASE};
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::ffi::{c_uint, c_void, CStr, CString};
 use std::ptr::{null, null_mut};
 use std::sync::Arc;
-use crate::core::scheduler::input_controller::SchNode;
 
 pub struct FfmpegContext {
     pub(crate) independent_readrate: bool,
@@ -144,6 +145,8 @@ impl FfmpegContext {
 
         check_fg_bindings(&filter_graphs)?;
 
+        check_frame_filter_pipeline(&muxs, &demuxs)?;
+
         Ok(Self {
             independent_readrate,
             demuxs,
@@ -152,6 +155,77 @@ impl FfmpegContext {
         })
     }
 }
+
+fn check_pipeline<T>(
+    frame_pipelines: Option<&Vec<FramePipeline>>,
+    streams: &[T],
+    tag: &str,
+    get_stream_index: impl Fn(&T) -> usize,
+    get_codec_type: impl Fn(&T) -> &AVMediaType,
+) -> Result<()> {
+    let tag_cap = {
+        let mut chars = tag.chars();
+        match chars.next() {
+            None => String::new(),
+            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        }
+    };
+
+    frame_pipelines
+        .into_iter()
+        .flat_map(|pipelines| pipelines.iter())
+        .try_for_each(|pipeline| {
+            if let Some(idx) = pipeline.stream_index {
+                streams
+                    .iter()
+                    .any(|s| get_stream_index(s) == idx && get_codec_type(s) == &pipeline.media_type)
+                    .then(|| ())
+                    .ok_or_else(|| {
+                        Into::<crate::error::Error>::into(FrameFilterStreamTypeNoMatched(
+                            tag_cap.clone(),
+                            idx,
+                            format!("{:?}", pipeline.media_type),
+                        ))
+                    })
+            } else {
+                streams
+                    .iter()
+                    .any(|s| get_codec_type(s) == &pipeline.media_type)
+                    .then(|| ())
+                    .ok_or_else(|| {
+                        FrameFilterTypeNoMatched(
+                            tag.into(),
+                            format!("{:?}", pipeline.media_type),
+                        )
+                            .into()
+                    })
+            }
+        })?;
+    Ok(())
+}
+
+fn check_frame_filter_pipeline(muxs: &[Muxer], demuxs: &[Demuxer]) -> Result<()> {
+    muxs.iter().try_for_each(|mux| {
+        check_pipeline(
+            mux.frame_pipelines.as_ref(),
+            mux.get_streams(),
+            "output",
+            |s| s.stream_index,
+            |s| &s.codec_type,
+        )
+    })?;
+    demuxs.iter().try_for_each(|demux| {
+        check_pipeline(
+            demux.frame_pipelines.as_ref(),
+            demux.get_streams(),
+            "input",
+            |s| s.stream_index,
+            |s| &s.codec_type,
+        )
+    })?;
+    Ok(())
+}
+
 
 fn check_fg_bindings(filter_graphs: &Vec<FilterGraph>) -> Result<()> {
     // check that all outputs were bound
@@ -249,7 +323,6 @@ fn map_manual(
                         i,
                         codec_id,
                         enc,
-                        Some(filter_graph.outputs[i].linklabel.clone()),
                     );
                 }
             }
@@ -351,7 +424,6 @@ fn map_manual(
                     let (frame_sender, output_stream_index) = mux.add_enc_stream(
                         media_type,
                         enc,
-                        Some(stream_map.linklabel.clone()),
                         demux_node
                     )?;
                     input_stream.add_dst(frame_sender);
@@ -752,9 +824,8 @@ unsafe fn map_auto_stream(
                     filter_graphs,
                 )?;
             } else {
-                let linklabel = type_to_linklabel(media_type, stream_index);
                 let (frame_sender, output_stream_index) =
-                    mux.add_enc_stream(media_type, enc, linklabel, demux.node.clone())?;
+                    mux.add_enc_stream(media_type, enc, demux.node.clone())?;
                 demux.get_stream_mut(stream_index).add_dst(frame_sender);
                 demux.connect_stream(stream_index);
                 let input_stream = demux.get_stream(stream_index);
@@ -818,7 +889,6 @@ fn init_simple_filtergraph(
     // filter_graph.outputs[0].media_type = codec_type;
 
     ifilter_bind_ist(&mut filter_graph, 0, stream_index, demux)?;
-    let linklabel = type_to_linklabel(codec_type, stream_index);
     ofilter_bind_ost(
         mux_index,
         mux,
@@ -826,7 +896,6 @@ fn init_simple_filtergraph(
         0,
         codec_id,
         enc,
-        linklabel,
     )?;
 
     filter_graphs.push(filter_graph);
@@ -993,12 +1062,7 @@ fn output_bind_by_unlabeled_filter(
                 }
                 Some((codec_id, enc)) => {
                     *auto_disable |= 1 << media_type as i32;
-                    let linklabel = if filter_graph.outputs[i].linklabel.is_empty() {
-                        None
-                    } else {
-                        Some(filter_graph.outputs[i].linklabel.clone())
-                    };
-                    ofilter_bind_ost(index, mux, filter_graph, i, codec_id, enc, linklabel)?;
+                    ofilter_bind_ost(index, mux, filter_graph, i, codec_id, enc)?;
                 }
             }
         }
@@ -1014,11 +1078,10 @@ fn ofilter_bind_ost(
     output_filter_index: usize,
     codec_id: AVCodecID,
     enc: *const AVCodec,
-    linklabel: Option<String>,
 ) -> Result<()> {
     let output_filter = &mut filter_graph.outputs[output_filter_index];
     let (frame_sender, output_stream_index) =
-        mux.add_enc_stream(output_filter.media_type, enc, linklabel, filter_graph.node.clone())?;
+        mux.add_enc_stream(output_filter.media_type, enc, filter_graph.node.clone())?;
     output_filter.set_dst(frame_sender);
 
     configure_output_filter_opts(
@@ -2177,7 +2240,6 @@ unsafe fn open_input_file(
         .unwrap_or_else(|| format!("read_callback[{index}]"));
 
     let demux = Demuxer::new(
-        index,
         url,
         input.url.is_none(),
         in_fmt_ctx,

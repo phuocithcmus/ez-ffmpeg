@@ -2,226 +2,158 @@ use crate::core::filter::frame_filter::FrameFilter;
 use crate::core::filter::frame_filter_context::FrameFilterContext;
 use ffmpeg_sys_next::AVMediaType;
 use std::any::Any;
-use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
-use std::rc::{Rc, Weak};
+use crate::filter::frame_pipeline_builder::FramePipelineBuilder;
 
-pub struct FramePipeline {
-    pub(crate) stream_index: usize,
-    pub(crate) linklabel: Option<String>,
-    pub(crate) media_type: AVMediaType,
-    pub(crate) head: Option<Rc<RefCell<FrameFilterContext>>>,
-    pub(crate) tail: Option<Rc<RefCell<FrameFilterContext>>>,
-    frame_pipeline: Weak<RefCell<FramePipeline>>,
-    attribute_map: HashMap<String, Box<dyn Any>>,
+/// Internally, we store each filter along with its name in a holder.
+pub(crate) struct FilterHolder {
+    name: String,
+    filter: Box<dyn FrameFilter>,
 }
+
+/// A pipeline that processes frames by passing them through all filters in order.
+/// It also stores an attribute map that filters can access/modify via `FrameFilterContext`.
+pub struct FramePipeline {
+    pub(crate) media_type: AVMediaType,
+    pub(crate) stream_index: Option<usize>,
+
+    pub(crate) filters: Vec<FilterHolder>,
+
+    // Shared data among all filters
+    attribute_map: HashMap<String, Box<dyn Any + Send>>,
+}
+
 impl FramePipeline {
-    pub(crate) fn new(
-        stream_index: usize,
-        linklabel: Option<String>,
-        media_type: AVMediaType,
-    ) -> Rc<RefCell<FramePipeline>> {
-        let frame_pipeline = Rc::new(RefCell::new(Self {
-            stream_index,
-            linklabel,
+    /// Creates a new pipeline for a given media type.
+    /// All filters must match this type.
+    pub fn new(media_type: AVMediaType, stream_index: Option<usize>) -> Self {
+        Self {
             media_type,
-            head: None,
-            tail: None,
-            frame_pipeline: Weak::new(),
-            attribute_map: Default::default(),
-        }));
-
-        frame_pipeline.borrow_mut().frame_pipeline = Rc::downgrade(&frame_pipeline);
-
-        frame_pipeline
+            stream_index,
+            filters: Vec::new(),
+            attribute_map: HashMap::new(),
+        }
     }
 
-    pub fn add_first(&mut self, name: &str, filter: Box<dyn FrameFilter>) {
+    /// Adds a filter to the pipeline. No dynamic removal is provided in this simplified approach.
+    pub fn add_filter(&mut self, name: impl Into<String>, filter: Box<dyn FrameFilter>) {
         assert_eq!(self.media_type, filter.media_type());
-        let context = Rc::new(RefCell::new(FrameFilterContext::new(
-            name,
+        self.filters.push(FilterHolder {
+            name: name.into(),
             filter,
-            self.frame_pipeline.upgrade().unwrap(),
-        )));
-        if let Some(head) = self.head.take() {
-            head.borrow_mut().prev = Some(Rc::downgrade(&context));
-            context.borrow_mut().next = Some(head);
-        }
-        self.head = Some(context.clone());
-        if self.tail.is_none() {
-            self.tail = Some(context);
-        }
+        });
     }
 
-    pub fn add_last(&mut self, name: &str, filter: Box<dyn FrameFilter>) {
-        assert_eq!(self.media_type, filter.media_type());
-        let context = Rc::new(RefCell::new(FrameFilterContext::new(
-            name,
-            filter,
-            self.frame_pipeline.upgrade().unwrap(),
-        )));
-        if let Some(tail) = self.tail.take() {
-            tail.borrow_mut().next = Some(context.clone());
-            context.borrow_mut().prev = Some(Rc::downgrade(&tail));
-        }
-        self.tail = Some(context.clone());
-        if self.head.is_none() {
-            self.head = Some(context);
-        }
+    /// Allows external code to directly set an attribute. (Optional convenience)
+    pub fn set_attribute<T: 'static + std::marker::Send>(&mut self, key: impl Into<String>, value: T) {
+        self.attribute_map.insert(key.into(), Box::new(value));
     }
 
-    pub fn add_before(
-        &mut self,
-        base_name: &str,
-        name: &str,
-        filter: Box<dyn FrameFilter>,
-    ) -> bool {
-        assert_eq!(self.media_type, filter.media_type());
-        let mut current = self.head.clone();
-        while let Some(node) = current {
-            if node.borrow().name == base_name {
-                let context = Rc::new(RefCell::new(FrameFilterContext::new(
-                    name,
-                    filter,
-                    self.frame_pipeline.upgrade().unwrap(),
-                )));
-                let mut node_mut = node.borrow_mut();
-                context.borrow_mut().next = Some(node.clone());
-                if let Some(prev) = node_mut.prev.take() {
-                    if let Some(prev) = prev.upgrade() {
-                        prev.borrow_mut().next = Some(context.clone());
-                        context.borrow_mut().prev = Some(Rc::downgrade(&prev));
-                    }
-                } else {
-                    self.head = Some(context.clone());
-                }
-                node_mut.prev = Some(Rc::downgrade(&context));
-                return true;
-            }
-            current = node.borrow().next.clone();
-        }
-        false
-    }
-
-    pub fn add_after(&mut self, base_name: &str, name: &str, filter: Box<dyn FrameFilter>) -> bool {
-        assert_eq!(self.media_type, filter.media_type());
-        let mut current = self.head.clone();
-        while let Some(node) = current {
-            if node.borrow().name == base_name {
-                let context = Rc::new(RefCell::new(FrameFilterContext::new(
-                    name,
-                    filter,
-                    self.frame_pipeline.upgrade().unwrap(),
-                )));
-                let mut node_mut = node.borrow_mut();
-                context.borrow_mut().prev = Some(Rc::downgrade(&node));
-                if let Some(next) = node_mut.next.take() {
-                    next.borrow_mut().prev = Some(Rc::downgrade(&context));
-                    context.borrow_mut().next = Some(next);
-                } else {
-                    self.tail = Some(context.clone());
-                }
-                node_mut.next = Some(context.clone());
-                return true;
-            }
-            current = node.borrow().next.clone();
-        }
-        false
-    }
-
-    pub fn remove(&mut self, name: &str) -> Option<Box<dyn FrameFilter>> {
-        let mut current = self.head.clone();
-        while let Some(node) = current {
-            if node.borrow().name == name {
-                let mut node_mut = node.borrow_mut();
-
-                let filter = node_mut.take_filter();
-
-                if let Some(prev) = node_mut.prev.take() {
-                    if let Some(prev) = prev.upgrade() {
-                        prev.borrow_mut().next = node_mut.next.clone();
-                    }
-                } else {
-                    self.head = node_mut.next.clone();
-                }
-
-                if let Some(next) = node_mut.next.take() {
-                    next.borrow_mut().prev = node_mut.prev.clone();
-                } else {
-                    self.tail = node_mut.prev.clone().and_then(|prev| prev.upgrade());
-                }
-
-                node_mut.prev = None;
-                node_mut.next = None;
-
-                return Some(filter);
-            }
-            current = node.borrow().next.clone();
-        }
-        None
-    }
-
-    pub fn find(&self, name: &str) -> Option<Rc<RefCell<FrameFilterContext>>> {
-        let mut current = self.head.clone();
-        while let Some(node) = current {
-            if node.borrow().name == name {
-                return Some(node);
-            }
-            current = node.borrow().next.clone();
-        }
-        None
-    }
-
-    pub fn replace(
-        &mut self,
-        old_name: &str,
-        new_name: &str,
-        new_filter: Box<dyn FrameFilter>,
-    ) -> Option<Box<dyn FrameFilter>> {
-        assert_eq!(self.media_type, new_filter.media_type());
-        let mut current = self.head.clone();
-        while let Some(node) = current {
-            if node.borrow().name == old_name {
-                let mut node_mut = node.borrow_mut();
-
-                let old_filter = node_mut.replace_filter(new_filter);
-
-                node_mut.name = new_name.to_string();
-
-                return Some(old_filter);
-            }
-            current = node.borrow().next.clone();
-        }
-        None
-    }
-
-    pub fn first_context(&self) -> Option<Ref<FrameFilterContext>> {
-        self.head.as_ref().map(|head| head.borrow())
-    }
-
-    pub fn first_context_mut(&mut self) -> Option<RefMut<FrameFilterContext>> {
-        self.head.as_mut().map(|head| head.borrow_mut())
-    }
-
-    pub fn last_context(&self) -> Option<Ref<FrameFilterContext>> {
-        self.tail.as_ref().map(|tail| tail.borrow())
-    }
-
-    pub fn last_context_mut(&mut self) -> Option<RefMut<FrameFilterContext>> {
-        self.tail.as_mut().map(|tail| tail.borrow_mut())
-    }
-
-    pub fn set_attribute<T: 'static>(&mut self, key: String, value: T) {
-        self.attribute_map.insert(key, Box::new(value));
-    }
-
+    /// Allows external code to retrieve an attribute by key.
     pub fn get_attribute<T: 'static>(&self, key: &str) -> Option<&T> {
         self.attribute_map
             .get(key)
-            .and_then(|value| value.downcast_ref::<T>())
+            .and_then(|v| v.downcast_ref::<T>())
     }
 
-    pub fn remove_attribute<T: 'static>(&mut self, key: &str) -> Option<Box<dyn Any>> {
-        self.attribute_map.remove(key)
+    /// Initializes all filters in order.
+    pub(crate) fn init_filters(&mut self) -> Result<(), String> {
+        for holder in &mut self.filters {
+            let mut ctx = FrameFilterContext::new(&holder.name, &mut self.attribute_map);
+            holder.filter.init(&mut ctx)?;
+        }
+        Ok(())
+    }
+
+    /// Calls `uninit` on all filters (in the same order).
+    /// (You can reverse the order if needed, but typically it's not strict.)
+    pub(crate) fn uninit_filters(&mut self) {
+        for holder in &mut self.filters {
+            let mut ctx = FrameFilterContext::new(&holder.name, &mut self.attribute_map);
+            holder.filter.uninit(&mut ctx);
+        }
+    }
+
+    /// Pushes a frame through each filter in order. If any filter returns `None`,
+    /// the frame is dropped. Otherwise, the final `Some(frame)` is returned.
+    pub(crate) fn run_filters(&mut self, mut frame: ffmpeg_next::Frame) -> Result<Option<ffmpeg_next::Frame>, String> {
+        for holder in &mut self.filters {
+            let mut ctx = FrameFilterContext::new(&holder.name, &mut self.attribute_map);
+            match holder.filter.filter_frame(frame, &mut ctx)? {
+                Some(f) => {
+                    frame = f;
+                }
+                None => {
+                    return Ok(None);
+                }
+            }
+        }
+        Ok(Some(frame))
+    }
+
+    pub(crate) fn filter_len(&self) -> usize {
+        self.filters.len()
+    }
+
+    pub(crate) fn request_frame(&mut self, index: usize) -> Result<Option<ffmpeg_next::Frame>, String> {
+        assert!(index < self.filters.len());
+        let holder = &mut self.filters[index];
+        let mut ctx = FrameFilterContext::new(&holder.name, &mut self.attribute_map);
+        holder.filter.request_frame(&mut ctx)
+    }
+
+    /// Passes the given `frame` through the filters starting at `start_index`.
+    ///
+    /// For example, if `start_index` is 2, we will call `filter_frame` on the 2nd filter,
+    /// then the 3rd, and so on, up to the last filter in the pipeline. If any filter
+    /// returns `None`, the frame is discarded and no further filters are called.
+    ///
+    /// # Parameters
+    /// - `start_index`: The zero-based index of the filter from which to begin processing.
+    /// - `frame`: The FFmpeg `Frame` to be processed.
+    ///
+    /// # Returns
+    /// - `Ok(Some(frame))` if the frame is successfully processed by all remaining filters.
+    /// - `Ok(None)` if any filter discards the frame by returning `None`.
+    /// - `Err(String)` if an error occurs in any filter.
+    pub(crate) fn run_filters_from(
+        &mut self,
+        start_index: usize,
+        mut frame: ffmpeg_next::Frame,
+    ) -> Result<Option<ffmpeg_next::Frame>, String> {
+        // If start_index is out of bounds, we can either return an error
+        // or treat it as "no filters to run." Here we choose to check bounds explicitly.
+        if start_index >= self.filters.len() {
+            // No filters to run, so the frame passes through unchanged.
+            return Ok(Some(frame));
+        }
+
+        // Iterate from `start_index` to the end of `self.filters`.
+        for i in start_index..self.filters.len() {
+            let holder = &mut self.filters[i];
+
+            // Build a temporary context, giving the filter its name and the attribute map.
+            let mut ctx = FrameFilterContext::new(&holder.name, &mut self.attribute_map);
+
+            // Call `filter_frame` on the filter. If `None`, discard the frame and stop.
+            match holder.filter.filter_frame(frame, &mut ctx)? {
+                Some(f) => {
+                    frame = f; // Continue to the next filter
+                }
+                None => {
+                    // The filter has dropped this frame
+                    return Ok(None);
+                }
+            }
+        }
+
+        // If we reach here, all remaining filters have produced Some(frame).
+        Ok(Some(frame))
+    }
+}
+
+impl From<FramePipelineBuilder> for FramePipeline {
+    fn from(pipeline: FramePipelineBuilder) -> Self {
+        pipeline.build()
     }
 }

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::core::filter::frame_pipeline_builder::FramePipelineBuilder;
+use crate::filter::frame_pipeline::FramePipeline;
 
 unsafe impl Send for Input {}
 
@@ -154,7 +154,7 @@ pub struct Input {
     /// customized processing (e.g., filtering, transformation, etc.).
     ///
     /// If `None`, no processing pipeline is applied to the decoded frames.
-    pub(crate) frame_pipelines: Option<Vec<FramePipelineBuilder>>,
+    pub(crate) frame_pipelines: Option<Vec<FramePipeline>>,
 
     /// The codec to be used for **video** decoding.
     ///
@@ -397,11 +397,8 @@ impl Input {
     ///
     /// This method clears any previously set pipelines and replaces them with the provided list.
     ///
-    /// **Note:** This method accepts [`FramePipelineBuilder`] instead of [`FramePipeline`](crate::core::filter::frame_pipeline::FramePipeline).
-    /// For details on why [`FramePipelineBuilder`] is used, see its documentation.
-    ///
     /// # Parameters
-    /// * `frame_pipelines` - A list of [`FramePipelineBuilder`] instances defining the
+    /// * `frame_pipelines` - A list of [`FramePipeline`] instances defining the
     ///   transformations to apply to decoded frames.
     ///
     /// # Returns
@@ -415,21 +412,18 @@ impl Input {
     ///         // Additional pipelines...
     ///     ]);
     /// ```
-    pub fn set_frame_pipelines(mut self, frame_pipelines: Vec<FramePipelineBuilder>) -> Self {
-        self.frame_pipelines = Some(frame_pipelines);
+    pub fn set_frame_pipelines(mut self, frame_pipelines: Vec<impl Into<FramePipeline>>) -> Self {
+        self.frame_pipelines = Some(frame_pipelines.into_iter().map(|frame_pipeline| frame_pipeline.into()).collect());
         self
     }
 
-    /// Adds a single [`FramePipelineBuilder`] to the existing pipeline list.
+    /// Adds a single [`FramePipeline`] to the existing pipeline list.
     ///
     /// If no pipelines are currently defined, this method creates a new pipeline list.
     /// Otherwise, it appends the provided pipeline to the existing transformations.
     ///
-    /// **Note:** This method accepts [`FramePipelineBuilder`] instead of [`FramePipeline`](crate::core::filter::frame_pipeline::FramePipeline).
-    /// For details on why [`FramePipelineBuilder`] is used, see its documentation.
-    ///
     /// # Parameters
-    /// * `frame_pipeline` - A [`FramePipelineBuilder`] defining a transformation.
+    /// * `frame_pipeline` - A [`FramePipeline`] defining a transformation.
     ///
     /// # Returns
     /// * `Self` - Returns the modified `Input`, enabling method chaining.
@@ -437,17 +431,17 @@ impl Input {
     /// # Example
     /// ```rust
     /// let input = Input::from("my_video.mp4")
-    ///     .add_frame_pipeline(FramePipelineBuilder::new(AVMediaType::AVMEDIA_TYPE_VIDEO).filter("opengl", Box::new(my_filter)))
-    ///     .add_frame_pipeline(FramePipelineBuilder::new(AVMediaType::AVMEDIA_TYPE_AUDIO).filter("my_custom_filter1", Box::new(...)).filter("my_custom_filter2", Box::new(...)));
+    ///     .add_frame_pipeline(FramePipelineBuilder::new(AVMediaType::AVMEDIA_TYPE_VIDEO).filter("opengl", Box::new(my_filter)).build())
+    ///     .add_frame_pipeline(FramePipelineBuilder::new(AVMediaType::AVMEDIA_TYPE_AUDIO).filter("my_custom_filter1", Box::new(...)).filter("my_custom_filter2", Box::new(...)).build());
     /// ```
-    pub fn add_frame_pipeline(mut self, frame_pipeline: FramePipelineBuilder) -> Self {
+    pub fn add_frame_pipeline(mut self, frame_pipeline: impl Into<FramePipeline>) -> Self {
         if self.frame_pipelines.is_none() {
-            self.frame_pipelines = Some(vec![frame_pipeline]);
+            self.frame_pipelines = Some(vec![frame_pipeline.into()]);
         } else {
             self.frame_pipelines
                 .as_mut()
                 .unwrap()
-                .push(frame_pipeline);
+                .push(frame_pipeline.into());
         }
         self
     }

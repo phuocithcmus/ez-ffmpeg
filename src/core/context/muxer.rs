@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::core::context::encoder_stream::EncoderStream;
-use crate::core::filter::frame_pipeline_builder::FramePipelineBuilder;
+use crate::core::filter::frame_pipeline::FramePipeline;
 use crate::core::context::output::{StreamMap, VSyncMethod};
 use crate::core::context::{FrameBox, PacketBox};
 use crate::error::OpenOutputError;
@@ -18,7 +18,7 @@ pub(crate) struct Muxer {
 
     pub(crate) out_fmt_ctx: *mut AVFormatContext,
     pub(crate) oformat_flags: i32,
-    pub(crate) frame_pipelines: Option<Vec<FramePipelineBuilder>>,
+    pub(crate) frame_pipelines: Option<Vec<FramePipeline>>,
 
     pub(crate) stream_maps: Vec<StreamMap>,
     pub(crate) video_codec: Option<String>,
@@ -65,7 +65,7 @@ impl Muxer {
         url: String,
         is_set_write_callback: bool,
         out_fmt_ctx: *mut AVFormatContext,
-        frame_pipelines: Option<Vec<FramePipelineBuilder>>,
+        frame_pipelines: Option<Vec<FramePipeline>>,
         stream_maps: Vec<StreamMap>,
         video_codec: Option<String>,
         audio_codec: Option<String>,
@@ -129,7 +129,6 @@ impl Muxer {
         &mut self,
         media_type: AVMediaType,
         enc: *const AVCodec,
-        linklabel: Option<String>,
         src_node: Arc<SchNode>,
     ) -> crate::error::Result<(Sender<FrameBox>, usize)> {
         let (packet_sender, st, stream_index) = self.new_stream(src_node)?;
@@ -156,7 +155,6 @@ impl Muxer {
 
         let stream = EncoderStream::new(
             stream_index,
-            linklabel,
             st,
             media_type,
             enc,

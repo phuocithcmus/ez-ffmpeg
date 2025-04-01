@@ -1,60 +1,50 @@
-use crate::core::filter::frame_filter::{FrameFilter, NoopFilter};
-use crate::core::filter::frame_pipeline::FramePipeline;
-use std::cell::{Ref, RefCell, RefMut};
-use std::rc::{Rc, Weak};
+//! `FrameFilterContext` provides filters with access to:
+//! - A name string (for debugging/logging).
+//! - A reference to the pipeline's `attribute_map`, so they can read or modify shared data
+//!   without holding a full reference to the entire pipeline.
 
-pub struct FrameFilterContext {
-    pub(crate) name: String,
-    pub(crate) frame_filter: Rc<RefCell<Box<dyn FrameFilter>>>,
-    pub(crate) prev: Option<Weak<RefCell<FrameFilterContext>>>,
-    pub(crate) next: Option<Rc<RefCell<FrameFilterContext>>>,
-    pub(crate) frame_pipeline: Rc<RefCell<FramePipeline>>,
+use std::any::Any;
+use std::collections::HashMap;
+
+/// The context passed to each filter method (init, filter_frame, request_frame, uninit).
+/// It contains a `name` for the current filter and a mutable reference to the pipeline's attributes.
+pub struct FrameFilterContext<'a> {
+    name: &'a str,
+    attribute_map: &'a mut HashMap<String, Box<dyn Any + std::marker::Send>>,
 }
 
-impl FrameFilterContext {
-
-    pub fn name(&self) -> String {
-        self.name.clone()
+impl<'a> FrameFilterContext<'a> {
+    /// Creates a new context for a specific filter name and attribute map.
+    pub fn new(name: &'a str, attribute_map: &'a mut HashMap<String, Box<dyn Any + std::marker::Send>>) -> Self {
+        Self { name, attribute_map }
     }
 
-    pub fn pipeline(&self) -> Rc<RefCell<FramePipeline>> {
-        self.frame_pipeline.clone()
+    /// Returns the filter's name, useful for logging or debugging.
+    pub fn name(&self) -> &str {
+        self.name
     }
 
-    pub(crate) fn new(
-        name: &str,
-        frame_filter: Box<dyn FrameFilter>,
-        frame_pipeline: Rc<RefCell<FramePipeline>>,
-    ) -> Self {
-        Self {
-            name: name.to_string(),
-            frame_filter:Rc::new(RefCell::new(frame_filter)),
-            prev: None,
-            next: None,
-            frame_pipeline,
-        }
+    /// Retrieves an attribute by `key`, downcasting it to `T`.
+    pub fn get_attribute<T: 'static>(&self, key: &str) -> Option<&T> {
+        self.attribute_map
+            .get(key)
+            .and_then(|value| value.downcast_ref::<T>())
     }
 
-
-    pub(crate) fn filter(&self) -> Rc<RefCell<Box<dyn FrameFilter>>> {
-        self.frame_filter.clone()
+    /// Retrieves a mutable attribute by `key`, downcasting it to `T`.
+    pub fn get_attribute_mut<T: 'static>(&mut self, key: &str) -> Option<&mut T> {
+        self.attribute_map
+            .get_mut(key)
+            .and_then(|value| value.downcast_mut::<T>())
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn filter_ref(&self) -> Ref<Box<dyn FrameFilter>> {
-        self.frame_filter.borrow()
+    /// Inserts or replaces an attribute under `key`.
+    pub fn set_attribute<T: 'static + std::marker::Send>(&mut self, key: &str, value: T) {
+        self.attribute_map.insert(key.to_string(), Box::new(value));
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn filter_mut(&mut self) -> RefMut<Box<dyn FrameFilter>> {
-        self.frame_filter.borrow_mut()
-    }
-
-    pub(crate) fn take_filter(&self) -> Box<dyn FrameFilter> {
-        std::mem::replace(&mut *self.frame_filter.borrow_mut(), Box::new(NoopFilter {}))
-    }
-
-    pub(crate) fn replace_filter(&self, new_filter: Box<dyn FrameFilter>) -> Box<dyn FrameFilter> {
-        std::mem::replace(&mut *self.frame_filter.borrow_mut(), new_filter)
+    /// Removes an attribute by `key` and returns it as `Box<dyn Any>` if found.
+    pub fn remove_attribute(&mut self, key: &str) -> Option<Box<dyn Any + std::marker::Send>> {
+        self.attribute_map.remove(key)
     }
 }

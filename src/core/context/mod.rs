@@ -350,6 +350,7 @@ unsafe fn free_input_opaque(mut avio_ctx: *mut AVIOContext) {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn type_to_linklabel(media_type: AVMediaType, index: usize) -> Option<String> {
     match media_type {
         AVMediaType::AVMEDIA_TYPE_UNKNOWN => None,

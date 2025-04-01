@@ -8,7 +8,6 @@ use ffmpeg_sys_next::{AVCodec, AVMediaType, AVStream};
 #[derive(Clone)]
 pub(crate) struct EncoderStream {
     pub(crate) stream_index: usize,
-    pub(crate) linklabel: Option<String>,
     pub(crate) stream: Stream,
     pub(crate) codec_type: AVMediaType,
     pub(crate) encoder: *const AVCodec,
@@ -23,7 +22,6 @@ pub(crate) struct EncoderStream {
 impl EncoderStream {
     pub(crate) fn new(
         stream_index: usize,
-        linklabel: Option<String>,
         stream: *mut AVStream,
         codec_type: AVMediaType,
         encoder: *const AVCodec,
@@ -36,7 +34,6 @@ impl EncoderStream {
     ) -> Self {
         Self {
             stream_index,
-            linklabel,
             stream: Stream { inner: stream },
             codec_type,
             encoder,

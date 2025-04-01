@@ -1,51 +1,14 @@
 use crate::core::filter::frame_filter::FrameFilter;
-use ffmpeg_sys_next::AVMediaType;
-use std::cell::RefCell;
-use std::rc::Rc;
 use crate::filter::frame_pipeline::FramePipeline;
+use ffmpeg_sys_next::AVMediaType;
 
 /// A builder for constructing [`FramePipeline`] instances.
-///
-/// ## No Public `build` Method – Users Should Not Call It Manually
-/// - `FramePipelineBuilder` does **not** expose a public `build` method.
-/// - Instead, the `FfmpegScheduler` is responsible for building `FramePipeline`
-///   at the appropriate time during execution.
-///
-/// ## Why Is `FramePipeline` Built Later?
-///
-/// - The `FfmpegScheduler` **delays** `FramePipeline` construction until execution starts.
-/// - This ensures the correct stream mappings before creating `FramePipeline`.
-///
-/// ## Why Not Build `FramePipeline` Immediately?
-///
-/// 1️⃣ **Self-Referencing Requires `Rc<RefCell<T>>` or `Arc<Mutex<T>>`**
-/// - `FramePipeline` needs **self-referencing** to allow dynamic modifications,
-///   such as adding or removing filters during frame processing.
-/// - Since Rust does not support self-referencing structs directly,
-///   we must use `Rc<RefCell<T>>` or `Arc<Mutex<T>>` for internal mutability.
-///
-/// 2️⃣ **Cannot Use `Rc<RefCell<T>>` Before `FfmpegScheduler` Execution**
-/// - If `FramePipeline` is pre-built as `Rc<RefCell<T>>`,
-///   it **cannot be transferred** to the execution thread safely.
-///
-/// 3️⃣ **Avoiding Performance Overhead of `Arc<Mutex<T>>`**
-/// - If `FramePipeline` were pre-built as `Arc<Mutex<T>>`,
-///   it would introduce **unnecessary synchronization overhead**.
-/// - Since `FramePipeline` is used **only within a single thread**,
-///   `Arc<Mutex<T>>` is **not needed** and would waste performance.
-///
-/// ## Final Decision: Delayed Construction by `FfmpegScheduler`
-/// - **To avoid unnecessary locking** (`Arc<Mutex<T>>`)
-/// - **To ensure safe initialization within a single thread**
-/// - **To allow `FramePipeline` self-referencing with `Rc<RefCell<T>>`**
-///
-/// The `FfmpegScheduler` builds `FramePipeline` **after** starting its execution thread,
-/// ensuring correctness while maintaining optimal performance.
 ///
 /// # Example
 /// ```rust
 /// let pipeline = FramePipelineBuilder::new(AVMediaType::AVMEDIA_TYPE_VIDEO)
-///     .filter("opengl", Box::new(OpenGLFrameFilter::new())); // Add an OpenGL filter
+///     .filter("opengl", Box::new(OpenGLFrameFilter::new())) // Add an OpenGL filter
+///     .build();
 /// ```
 pub struct FramePipelineBuilder {
     /// The index of the stream being processed.
@@ -53,13 +16,6 @@ pub struct FramePipelineBuilder {
     /// This value corresponds to the `stream_index` of an input or output stream in FFmpeg.
     /// It is used to identify which stream the pipeline applies to.
     pub(crate) stream_index: Option<usize>,
-
-    /// The FFmpeg-style link label for matching streams.
-    ///
-    /// In FFmpeg filter graph notation, link labels such as `0:v` (first video stream) or `1:a` (second audio stream)
-    /// are used to connect different processing stages. This field allows explicit linking of streams
-    /// in multi-stream processing scenarios.
-    pub(crate) linklabel: Option<String>,
 
     /// The type of media this pipeline is processing.
     ///
@@ -98,33 +54,9 @@ impl FramePipelineBuilder {
     pub fn new(media_type: AVMediaType) -> Self {
         Self {
             stream_index: None,
-            linklabel: None,
             media_type,
             filters: vec![],
         }
-    }
-
-    /// Sets the FFmpeg-style link label for this pipeline.
-    ///
-    /// This label is used for identifying and matching streams in FFmpeg filter graphs.
-    /// Examples of link labels include:
-    /// - `"0:v"` for the first video stream.
-    /// - `"1:a"` for the second audio stream.
-    ///
-    /// # Arguments
-    /// - `linklabel` - A `String` or type convertible to `String` that represents the link label.
-    ///
-    /// # Returns
-    /// The modified `FramePipelineBuilder` instance, allowing method chaining.
-    ///
-    /// # Example
-    /// ```rust
-    /// let builder = FramePipelineBuilder::new(AVMEDIA_TYPE_AUDIO)
-    ///     .set_linklabel("1:a");
-    /// ```
-    pub fn set_linklabel(mut self, linklabel: impl Into<String>) -> Self {
-        self.linklabel = Some(linklabel.into());
-        self
     }
 
     /// Sets the stream index for this pipeline.
@@ -172,35 +104,24 @@ impl FramePipelineBuilder {
         self
     }
 
-    /// **[Internal Use]** Builds the `FramePipeline` instance.
-    ///
-    /// This method is **automatically called by the `scheduler`** when execution begins.
-    /// Users should **not call `build` manually**, because:
-    /// - The input and output stream mappings are only known at runtime.
-    /// - The `scheduler` determines whether streams exist before constructing pipelines.
+    /// Builds the `FramePipeline` instance.
     ///
     /// # Arguments
     /// - `stream_index`: The final determined stream index.
-    /// - `linklabel`: The final determined FFmpeg link label.
     ///
     /// # Returns
     /// A reference-counted `FramePipeline` instance.
     ///
     /// # Example
     /// ```rust
-    /// let pipeline = builder.build(0, Some("0:v".to_string())); // Automatically invoked
+    /// let pipeline = builder.build();
     /// ```
     ///
-    /// **Warning:** Do not call this method manually. It is managed by the `scheduler`.
-    pub(crate) fn build(
-        mut self,
-        stream_index: usize,
-        linklabel: Option<String>,
-    ) -> Rc<RefCell<FramePipeline>> {
-        let frame_pipeline = FramePipeline::new(stream_index, linklabel, self.media_type);
+    pub fn build(self) -> FramePipeline {
+        let mut frame_pipeline = FramePipeline::new(self.media_type, self.stream_index);
 
-        for (name, filter) in self.filters.drain(..) {
-            frame_pipeline.borrow_mut().add_last(&name, filter);
+        for (name, filter) in self.filters.into_iter() {
+            frame_pipeline.add_filter(name, filter);
         }
 
         frame_pipeline
