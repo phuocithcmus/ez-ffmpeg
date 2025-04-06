@@ -13,7 +13,7 @@ use ffmpeg_next::Frame;
 use ffmpeg_sys_next::{av_frame_copy_props, av_frame_ref};
 use log::{debug, error, info, warn};
 use std::ptr::null_mut;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
@@ -32,7 +32,7 @@ pub(crate) fn input_pipeline_init(
     }
 
     // Match type to find index and linklabel.
-    let (stream_index, encoder_frame_receiver, pipeline_frame_senders, fg_input_index) =
+    let (stream_index, encoder_frame_receiver, pipeline_frame_senders) =
         match_decoder_stream(&pipeline, decoder_streams)?;
 
     pipeline_init(
@@ -42,7 +42,6 @@ pub(crate) fn input_pipeline_init(
         stream_index,
         encoder_frame_receiver,
         pipeline_frame_senders,
-        fg_input_index,
         frame_pool,
         scheduler_status,
         scheduler_result,
@@ -71,8 +70,7 @@ pub(crate) fn output_pipeline_init(
         pipeline,
         stream_index,
         encoder_frame_receiver,
-        vec![pipeline_frame_sender],
-        0,
+        vec![(pipeline_frame_sender, usize::MAX, Arc::new([]))],
         frame_pool,
         scheduler_status,
         scheduler_result,
@@ -82,8 +80,8 @@ pub(crate) fn output_pipeline_init(
 fn match_decoder_stream(
     pipeline: &FramePipeline,
     decoder_streams: &mut Vec<DecoderStream>,
-) -> crate::error::Result<(usize, Receiver<FrameBox>, Vec<Sender<FrameBox>>, usize)> {
-    let (stream_index, pipeline_frame_receiver, decoder_frame_senders, fg_input_index) =
+) -> crate::error::Result<(usize, Receiver<FrameBox>, Vec<(Sender<FrameBox>, usize, Arc<[AtomicBool]>)>)> {
+    let (stream_index, pipeline_frame_receiver, decoder_frame_senders) =
         match pipeline.stream_index {
             Some(stream_index) => {
                 match decoder_streams
@@ -101,13 +99,12 @@ fn match_decoder_stream(
                         let (pipeline_frame_sender, pipeline_frame_receiver) =
                             crossbeam_channel::bounded(8);
                         let decoder_frame_senders =
-                            decoder_stream.replace_dsts(pipeline_frame_sender);
+                            decoder_stream.replace_dsts(pipeline_frame_sender, usize::MAX, Arc::new([]));
 
                         (
                             stream_index,
                             pipeline_frame_receiver,
                             decoder_frame_senders,
-                            decoder_stream.fg_input_index,
                         )
                     }
                 }
@@ -125,12 +122,11 @@ fn match_decoder_stream(
                 Some(decoder_stream) => {
                     let (pipeline_frame_sender, pipeline_frame_receiver) =
                         crossbeam_channel::bounded(8);
-                    let decoder_frame_senders = decoder_stream.replace_dsts(pipeline_frame_sender);
+                    let decoder_frame_senders = decoder_stream.replace_dsts(pipeline_frame_sender, usize::MAX, Arc::new([]));
                     (
                         decoder_stream.stream_index,
                         pipeline_frame_receiver,
-                        decoder_frame_senders,
-                        decoder_stream.fg_input_index,
+                        decoder_frame_senders
                     )
                 }
             },
@@ -138,8 +134,7 @@ fn match_decoder_stream(
     Ok((
         stream_index,
         pipeline_frame_receiver,
-        decoder_frame_senders,
-        fg_input_index,
+        decoder_frame_senders
     ))
 }
 
@@ -212,8 +207,7 @@ fn pipeline_init(
     mut pipeline: FramePipeline,
     stream_index: usize,
     frame_receiver: Receiver<FrameBox>,
-    frame_senders: Vec<Sender<FrameBox>>,
-    fg_input_index: usize,
+    frame_senders: Vec<(Sender<FrameBox>, usize, Arc<[AtomicBool]>)>,
     frame_pool: ObjPool<Frame>,
     scheduler_status: Arc<AtomicUsize>,
     scheduler_result: Arc<Mutex<Option<crate::error::Result<()>>>>,
@@ -243,7 +237,6 @@ fn pipeline_init(
                 &mut pipeline,
                 frame_receiver,
                 frame_senders,
-                fg_input_index,
                 &frame_pool,
                 &scheduler_status,
             ) {
@@ -268,8 +261,7 @@ fn pipeline_init(
 fn run_pipeline(
     pipeline: &mut FramePipeline,
     frame_receiver: Receiver<FrameBox>,
-    mut frame_senders: Vec<Sender<FrameBox>>,
-    fg_input_index: usize,
+    mut frame_senders: Vec<(Sender<FrameBox>, usize, Arc<[AtomicBool]>)>,
     frame_pool: &ObjPool<Frame>,
     scheduler_status: &Arc<AtomicUsize>,
 ) -> crate::error::Result<()> {
@@ -299,7 +291,6 @@ fn run_pipeline(
                         Ok(tmp_frame) => send_frame(
                             pipeline,
                             &mut frame_senders,
-                            fg_input_index,
                             frame_pool,
                             tmp_frame,
                         )?,
@@ -343,7 +334,6 @@ fn run_pipeline(
                     Ok(tmp_frame) => send_frame(
                         pipeline,
                         &mut frame_senders,
-                        fg_input_index,
                         frame_pool,
                         tmp_frame,
                     )?,
@@ -367,8 +357,7 @@ fn run_pipeline(
 
 fn send_frame(
     pipeline: &mut FramePipeline,
-    frame_senders: &mut Vec<Sender<FrameBox>>,
-    fg_input_index: usize,
+    frame_senders: &mut Vec<(Sender<FrameBox>, usize, Arc<[AtomicBool]>)>,
     frame_pool: &ObjPool<Frame>,
     tmp_frame: Option<Frame>,
 ) -> crate::error::Result<()> {
@@ -382,12 +371,18 @@ fn send_frame(
                 input_stream_height: 0,
                 subtitle_header_size: 0,
                 subtitle_header: null_mut(),
-                fg_input_index,
+                fg_input_index: usize::MAX,
             },
         };
 
         let mut finished_senders = Vec::new();
-        for (i, sender) in frame_senders.iter().enumerate() {
+        for (i, (sender, fg_input_index, finished_flag_list)) in frame_senders.iter().enumerate() {
+            if !finished_flag_list.is_empty() && *fg_input_index < finished_flag_list.len() {
+                if finished_flag_list[*fg_input_index].load(Ordering::Acquire) {
+                    finished_senders.push(i);
+                    continue;
+                }
+            }
             if i < frame_senders.len() - 1 {
                 let mut to_send = frame_pool.get()?;
 
@@ -407,9 +402,11 @@ fn send_frame(
                         }
                     };
                 }
+                let mut frame_data = frame_box.frame_data.clone();
+                frame_data.fg_input_index = *fg_input_index;
                 let frame_box = FrameBox {
                     frame: to_send,
-                    frame_data: frame_box.frame_data.clone(),
+                    frame_data,
                 };
                 if let Err(_) = sender.send(frame_box) {
                     debug!(

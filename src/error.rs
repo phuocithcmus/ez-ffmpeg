@@ -1036,6 +1036,9 @@ pub enum FilterGraphError {
     #[error("Resource temporarily unavailable during filter graph processing")]
     TryAgain,
 
+    #[error("EOF")]
+    EOF,
+
     #[error("An unknown error occurred during filter graph processing. ret:{0}")]
     UnknownError(i32),
 }
@@ -1051,6 +1054,7 @@ impl From<i32> for FilterGraphError {
             AVERROR_NOT_IMPLEMENTED => FilterGraphError::NotImplemented,
             AVERROR_OPERATION_NOT_PERMITTED => FilterGraphError::OperationNotPermitted,
             AVERROR_AGAIN => FilterGraphError::TryAgain,
+            AVERROR_EOF => FilterGraphError::EOF,
             _ => FilterGraphError::UnknownError(err_code),
         }
     }

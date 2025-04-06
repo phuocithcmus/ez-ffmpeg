@@ -58,7 +58,7 @@ use std::collections::VecDeque;
 use std::f64::consts::PI;
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::ptr::{null, null_mut};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use crate::util::ffmpeg_utils::av_err2str;
@@ -81,7 +81,7 @@ pub(crate) fn filter_graph_init(
         }
     }
 
-    let src = filter_graph.take_src();
+    let (src, finished_flag_list) = filter_graph.take_src();
 
     let input_len = filter_graph.inputs.len();
     let output_len = filter_graph.outputs.len();
@@ -110,6 +110,7 @@ pub(crate) fn filter_graph_init(
             filter_graph.outputs[i].opts.clone(),
             filter_graph.outputs[i].take_dst(),
             filter_graph.outputs[i].fg_input_index,
+            filter_graph.outputs[i].finished_flag_list.clone(),
         );
         ofps.push(output_filter_parameter);
     }
@@ -156,6 +157,14 @@ pub(crate) fn filter_graph_init(
                 let frame_box = result.unwrap();
                 let input_index = frame_box.frame_data.fg_input_index;
 
+                if input_index < finished_flag_list.len() {
+                    if finished_flag_list[input_index].load(Ordering::Acquire) {
+                       continue;
+                    }
+                } else {
+                    unreachable!()
+                }
+
                 unsafe {
                     if ifps[input_index].media_type == AVMEDIA_TYPE_SUBTITLE {
                         //TODO
@@ -174,9 +183,17 @@ pub(crate) fn filter_graph_init(
                             input_index,
                             &frame_pool,
                         ) {
-                            error!("filter_graph send_frame error: {e}");
-                            set_scheduler_error(&scheduler_status, &scheduler_result, e);
-                            break;
+                            match e {
+                                Error::FilterGraph(FilterGraphOperationError::BufferSourceAddFrameError(FilterGraphError::EOF)) => {
+                                    debug!("Input {} no longer accepts new data", input_index);
+                                    filter_receive_finish(&finished_flag_list, input_index);
+                                }
+                                e => {
+                                    error!("filter_graph send_frame error: {e}");
+                                    set_scheduler_error(&scheduler_status, &scheduler_result, e);
+                                    break;
+                                }
+                            }
                         }
                     } else {
                         if let Err(e) = fg_send_eof(
@@ -190,9 +207,17 @@ pub(crate) fn filter_graph_init(
                             input_index,
                             &frame_pool,
                         ) {
-                            error!("filter_graph send_eof error: {e}");
-                            set_scheduler_error(&scheduler_status, &scheduler_result, e);
-                            break;
+                            match e {
+                                Error::FilterGraph(FilterGraphOperationError::BufferSourceAddFrameError(FilterGraphError::EOF)) => {
+                                    debug!("Input {} no longer accepts new data", input_index);
+                                    filter_receive_finish(&finished_flag_list, input_index);
+                                }
+                                e => {
+                                    error!("filter_graph send_eof error: {e}");
+                                    set_scheduler_error(&scheduler_status, &scheduler_result, e);
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -245,6 +270,16 @@ pub(crate) fn filter_graph_init(
     }
 
     Ok(())
+}
+
+fn filter_receive_finish(finished_flag_list: &Arc<[AtomicBool]>, input_index: usize) {
+    if input_index < finished_flag_list.len() {
+        if !finished_flag_list[input_index].load(Ordering::Acquire) {
+            finished_flag_list[input_index].store(true, Ordering::Release);
+        }
+    } else {
+        unreachable!()
+    }
 }
 
 unsafe fn ifilter_has_all_input_formats(ifps: &Vec<InputFilterParameter>) -> bool {
@@ -338,6 +373,7 @@ struct OutputFilterParameter {
     dst: Option<Sender<FrameBox>>,
 
     fg_input_index: usize,
+    finished_flag_list: Arc<[AtomicBool]>,
 
     filter: *mut AVFilterContext,
     name: String,
@@ -363,6 +399,7 @@ impl OutputFilterParameter {
         opts: OutputFilterOptions,
         dst: Option<Sender<FrameBox>>,
         fg_input_index: usize,
+        finished_flag_list: Arc<[AtomicBool]>,
     ) -> Self {
         let mut fpsconv_context = FPSConvContext::default();
         fpsconv_context.framerate = opts.framerate;
@@ -370,6 +407,7 @@ impl OutputFilterParameter {
             media_type,
             dst,
             fg_input_index,
+            finished_flag_list,
             filter: null_mut(),
             name: "".to_string(),
             opts,
@@ -1378,6 +1416,14 @@ unsafe fn fg_output_frame(
     mut frame: Frame,
     frame_pool: &ObjPool<Frame>,
 ) -> i32 {
+    if !ofp.finished_flag_list.is_empty() && ofp.fg_input_index < ofp.finished_flag_list.len() {
+        if ofp.finished_flag_list[ofp.fg_input_index].load(Ordering::Acquire) {
+            ofp.eof = true;
+            fgp.nb_outputs_done += 1;
+            return 0;
+        }
+    }
+
     let mut nb_frames = if !frame_is_null(&frame) { 1 } else { 0 };
     let mut nb_frames_prev = 0;
 
@@ -1448,7 +1494,7 @@ unsafe fn fg_output_frame(
         };
 
         // send the frame to consumers
-        if let Some(dst) = ofp.dst.clone() {
+        if let Some(dst) = ofp.dst.as_ref() {
             let framerate = if ofp.opts.framerate.den == 0 {
                 None
             } else {
@@ -2394,10 +2440,10 @@ unsafe fn configure_input_video_filter(
     sub2video_prepare(ifp);
     }*/
 
-    /*let mut sar = ifp.sample_aspect_ratio;
+    let mut sar = ifp.sample_aspect_ratio;
     if sar.den == 0 {
         sar = AVRational { num: 0, den: 1 };
-    }*/
+    }
 
     let mut args = format!(
         "video_size={}x{}:pix_fmt={}:time_base={}/{}:pixel_aspect={}/{}:colorspace={}:range={}",
@@ -2406,8 +2452,8 @@ unsafe fn configure_input_video_filter(
         ifp.format,
         ifp.time_base.num,
         ifp.time_base.den,
-        ifp.sample_aspect_ratio.num,
-        ifp.sample_aspect_ratio.den,
+        sar.num,
+        sar.den,
         ifp.color_space as i32,
         ifp.color_range as i32,
     );
@@ -2574,11 +2620,7 @@ fn insert_filter(
 }
 
 fn get_rotation(displaymatrix: &[i32; 9]) -> f64 {
-    let mut theta = if displaymatrix.iter().all(|&x| x == 0) {
-        0.0
-    } else {
-        -round(display_rotation_get(displaymatrix))
-    };
+    let mut theta = -round(display_rotation_get(displaymatrix));
 
     theta -= 360.0 * (theta / 360.0 + 0.9 / 360.0).floor();
 

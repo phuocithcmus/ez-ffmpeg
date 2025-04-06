@@ -27,7 +27,7 @@ use ffmpeg_sys_next::{av_buffer_create, av_buffer_ref, av_calloc, av_dict_set, a
 use log::{debug, error, info, trace, warn};
 use std::ffi::{c_void, CStr, CString};
 use std::ptr::{null, null_mut};
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use crate::util::ffmpeg_utils::av_err2str;
@@ -242,7 +242,7 @@ unsafe fn transcode_subtitles(
     mut packet_box: PacketBox,
     packet_pool: &ObjPool<Packet>,
     frame_pool: &ObjPool<Frame>,
-    senders: &Vec<Sender<FrameBox>>,
+    senders: &Vec<(Sender<FrameBox>, usize, Arc<[AtomicBool]>)>,
 ) -> crate::error::Result<()> {
     if !packet_is_null(&packet_box.packet)
         && (*packet_box.packet.as_ptr()).stream_index >= 0
@@ -358,7 +358,7 @@ unsafe fn process_subtitle(
     dp_arc: Arc<Mutex<DecoderParameter>>,
     frame: Frame,
     frame_pool: &ObjPool<Frame>,
-    senders: &Vec<Sender<FrameBox>>,
+    senders: &Vec<(Sender<FrameBox>, usize, Arc<[AtomicBool]>)>,
 ) -> crate::error::Result<()> {
     let subtitle = (*(*frame.as_ptr()).buf[0]).data as *mut AVSubtitle;
 
@@ -538,12 +538,18 @@ fn fix_sub_duration_heartbeat(_dp_arc: Arc<Mutex<DecoderParameter>>, _signal_pts
 }
 
 unsafe fn dec_send(
-    frame_box: FrameBox,
+    mut frame_box: FrameBox,
     frame_pool: &ObjPool<Frame>,
-    senders: &Vec<Sender<FrameBox>>,
+    senders: &Vec<(Sender<FrameBox>, usize, Arc<[AtomicBool]>)>,
 ) -> crate::error::Result<()> {
     let mut nb_done = 0;
-    for (i, sender) in senders.iter().enumerate() {
+    for (i, (sender, fg_input_index, finished_flag_list)) in senders.iter().enumerate() {
+        if !finished_flag_list.is_empty() && *fg_input_index < finished_flag_list.len() {
+            if finished_flag_list[*fg_input_index].load(Ordering::Acquire) {
+                nb_done += 1;
+                continue;
+            }
+        }
         if i < senders.len() - 1 {
             let Ok(mut to_send) = frame_pool.get() else {
                 return Err(Decoding(DecodingOperationError::FrameAllocationError(
@@ -551,7 +557,8 @@ unsafe fn dec_send(
                 )));
             };
 
-            let frame_data = frame_box.frame_data.clone();
+            let mut frame_data = frame_box.frame_data.clone();
+            frame_data.fg_input_index = *fg_input_index;
 
             // frame may sometimes contain props only,
             // e.g. to signal EOF timestamp
@@ -581,6 +588,8 @@ unsafe fn dec_send(
                 continue;
             }
         } else {
+            frame_box.frame_data.fg_input_index = *fg_input_index;
+
             if let Err(_) = sender.send(frame_box) {
                 debug!("Decoder send frame failed, destination already finished");
                 nb_done += 1;
@@ -608,7 +617,7 @@ unsafe fn dec_frame_to_box(dp_arc: Arc<Mutex<DecoderParameter>>, frame: Frame) -
             input_stream_height: (*dec_ctx).height,
             subtitle_header_size: (*dec_ctx).subtitle_header_size,
             subtitle_header: (*dec_ctx).subtitle_header,
-            fg_input_index: dp.fg_input_index,
+            fg_input_index: usize::MAX,
         },
     };
     frame_box
@@ -1058,8 +1067,6 @@ struct DecoderParameter {
     last_frame_sample_rate: i32,
     // view_map: Vec<ViewMap>,
 
-    fg_input_index: usize,
-
 }
 
 unsafe impl Send for DecoderParameter {}
@@ -1110,8 +1117,6 @@ impl DecoderParameter {
             last_frame_sample_rate: 0,
 
             // view_map: vec![],
-
-            fg_input_index: dec_stream.fg_input_index,
         }
     }
 }
@@ -1129,9 +1134,16 @@ struct Decoder {
     decode_errors: u64,
 }
 
-fn dec_done(dp_arc: &Arc<Mutex<DecoderParameter>>, senders: &Vec<Sender<FrameBox>>) {
-    for sender in senders {
-        let frame_box = unsafe { dec_frame_to_box(dp_arc.clone(), null_frame()) };
+fn dec_done(dp_arc: &Arc<Mutex<DecoderParameter>>, senders: &Vec<(Sender<FrameBox>, usize, Arc<[AtomicBool]>)>) {
+    for (sender, fg_input_index, finished_flag_list) in senders {
+        if !finished_flag_list.is_empty() && *fg_input_index < finished_flag_list.len() {
+            if finished_flag_list[*fg_input_index].load(Ordering::Acquire) {
+                continue;
+            }
+        }
+
+        let mut frame_box = unsafe { dec_frame_to_box(dp_arc.clone(), null_frame()) };
+        frame_box.frame_data.fg_input_index = *fg_input_index;
         if let Err(_) = sender.send(frame_box) {
             debug!("Decoder send EOF failed, destination already finished");
         }
@@ -1163,7 +1175,7 @@ unsafe fn packet_decode(
     packet_box: PacketBox,
     packet_pool: &ObjPool<Packet>,
     frame_pool: &ObjPool<Frame>,
-    senders: &Vec<Sender<FrameBox>>,
+    senders: &Vec<(Sender<FrameBox>, usize, Arc<[AtomicBool]>)>,
 ) -> crate::error::Result<()> {
     let dec_ctx = {
         let dp = dp_arc.clone();
@@ -1307,7 +1319,6 @@ unsafe fn packet_decode(
 
         if let Err(e) = dec_send(frame_box, &frame_pool, &senders) {
             return if e == Error::EOF {
-                error!("Error signalling EOF");
                 Err(Error::Exit)
             } else {
                 Err(e)

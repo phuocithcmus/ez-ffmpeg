@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use crate::core::codec::Codec;
 use crate::core::context::{FrameBox, PacketBox, Stream};
 use crate::core::hwaccel::HWAccelID;
@@ -25,10 +27,8 @@ pub(crate) struct DecoderStream {
     pub(crate) hwaccel_device: Option<String>,
     pub(crate) hwaccel_output_format: AVPixelFormat,
 
-    pub(crate) fg_input_index: usize,
-
     src: Option<Receiver<PacketBox>>,
-    dsts: Vec<Sender<FrameBox>>,
+    dsts: Vec<(Sender<FrameBox>, usize, Arc<[AtomicBool]>)>,
 }
 
 impl DecoderStream {
@@ -62,7 +62,6 @@ impl DecoderStream {
             hwaccel_device_type,
             hwaccel_device,
             hwaccel_output_format,
-            fg_input_index: 0,
             src: None,
             dsts: vec![],
         }
@@ -77,18 +76,22 @@ impl DecoderStream {
     }
 
     pub(crate) fn add_dst(&mut self, frame_dst: Sender<FrameBox>) {
-        self.dsts.push(frame_dst);
+        self.add_fg_dst(frame_dst, usize::MAX, Arc::new([]));
+    }
+
+    pub(crate) fn add_fg_dst(&mut self, frame_dst: Sender<FrameBox>, fg_input_index: usize, finished_flag_list: Arc<[AtomicBool]>) {
+        self.dsts.push((frame_dst, fg_input_index, finished_flag_list));
     }
 
     pub(crate) fn take_src(&mut self) -> Option<Receiver<PacketBox>> {
         self.src.take()
     }
 
-    pub(crate) fn take_dsts(&mut self) -> Vec<Sender<FrameBox>> {
+    pub(crate) fn take_dsts(&mut self) -> Vec<(Sender<FrameBox>, usize, Arc<[AtomicBool]>)> {
         std::mem::take(&mut self.dsts)
     }
 
-    pub fn replace_dsts(&mut self, new_dsts: Sender<FrameBox>) -> Vec<Sender<FrameBox>> {
-        std::mem::replace(&mut self.dsts, vec![new_dsts])
+    pub fn replace_dsts(&mut self, new_dsts: Sender<FrameBox>, fg_input_index: usize, finished_flag_list: Arc<[AtomicBool]>) -> Vec<(Sender<FrameBox>, usize, Arc<[AtomicBool]>)> {
+        std::mem::replace(&mut self.dsts, vec![(new_dsts, fg_input_index, finished_flag_list)])
     }
 }

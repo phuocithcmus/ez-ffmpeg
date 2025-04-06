@@ -5,6 +5,8 @@ use crossbeam_channel::Sender;
 use ffmpeg_sys_next::{AVChannelLayout, AVChannelLayout__bindgen_ty_1, AVChannelOrder};
 use ffmpeg_sys_next::{AVCodec, AVColorRange, AVColorSpace, AVMediaType, AVPixelFormat, AVRational, AVSampleFormat};
 use std::ptr::{null, null_mut};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 #[derive(Clone)]
 pub(crate) struct OutputFilter {
@@ -13,6 +15,7 @@ pub(crate) struct OutputFilter {
     pub(crate) name: String,
     pub(crate) opts: OutputFilterOptions,
     pub(crate) fg_input_index: usize,
+    pub(crate) finished_flag_list: Arc<[AtomicBool]>,
     dst: Option<Sender<FrameBox>>,
 }
 
@@ -24,6 +27,7 @@ impl OutputFilter {
             name,
             opts: OutputFilterOptions::new(),
             fg_input_index: 0,
+            finished_flag_list: Arc::new([]),
             dst: None,
         }
     }

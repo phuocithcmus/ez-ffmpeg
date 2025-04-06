@@ -1582,16 +1582,16 @@ fn bind_fg_inputs_by_fg(filter_graphs: &mut Vec<FilterGraph>) -> Result<()> {
 
                     }
 
-                    let sender = {
+                    let (sender, finished_flag_list) = {
                         let filter_graph = &mut filter_graphs[i];
-                        let sender = filter_graph.get_src_sender();
-                        sender
+                        filter_graph.get_src_sender()
                     };
 
                     {
                         let filter_graph = &mut filter_graphs[j];
                         filter_graph.outputs[output_idx].set_dst(sender);
                         filter_graph.outputs[output_idx].fg_input_index = i;
+                        filter_graph.outputs[output_idx].finished_flag_list = finished_flag_list;
                     }
 
                     break 'outer;
@@ -1744,11 +1744,10 @@ fn ifilter_bind_ist(
         }
         input_filter.opts.trim_end_us = demux.recording_time_us;
 
-        let sender = filter_graph.get_src_sender();
+        let (sender, finished_flag_list) = filter_graph.get_src_sender();
         {
             let input_stream = demux.get_stream_mut(stream_idx);
-            input_stream.add_dst(sender);
-            input_stream.fg_input_index = input_index;
+            input_stream.add_fg_dst(sender, input_index, finished_flag_list);
         };
 
         let node = Arc::make_mut(&mut filter_graph.node);
