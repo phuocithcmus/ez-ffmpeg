@@ -219,12 +219,14 @@ fn receive_from(
     receiver: &Receiver<FrameBox>,
     scheduler_status: &Arc<AtomicUsize>,
 ) -> Result<FrameBox, SyncFrame> {
-    if wait_until_not_paused(scheduler_status) == STATUS_END {
-        info!("Encoder receiver end command, finishing.");
-        return Err(SyncFrame::Break);
-    }
     match receiver.recv_timeout(Duration::from_millis(100)) {
-        Ok(frame_box) => Ok(frame_box),
+        Ok(frame_box) => {
+            if wait_until_not_paused(scheduler_status) == STATUS_END {
+                info!("Encoder receiver end command, finishing.");
+                return Err(SyncFrame::Break);
+            }
+            Ok(frame_box)
+        },
         Err(e) if e == RecvTimeoutError::Disconnected => {
             debug!("Source[decoder/filtergraph/pipeline] thread exit.");
             Err(SyncFrame::Break)
@@ -321,6 +323,7 @@ fn receive_frame(
             error!("Receive frame is null on open encoder");
             return SyncFrame::Break;
         }
+
         if let Err(e) = enc_open(enc_ctx, stream, &mut frame_box, ready_sender.clone(), bits_per_raw_sample.clone()) {
             frame_pool.release(frame_box.frame);
             error!("Open encoder error: {e}");
