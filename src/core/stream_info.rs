@@ -2,12 +2,18 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::ptr::{null, null_mut};
 
-use ffmpeg_sys_next::{avformat_close_input, avformat_open_input};
-use ffmpeg_sys_next::AVMediaType::{AVMEDIA_TYPE_ATTACHMENT, AVMEDIA_TYPE_AUDIO, AVMEDIA_TYPE_DATA, AVMEDIA_TYPE_SUBTITLE, AVMEDIA_TYPE_UNKNOWN, AVMEDIA_TYPE_VIDEO};
 #[cfg(not(feature = "docs-rs"))]
 use ffmpeg_sys_next::AVChannelOrder;
-use ffmpeg_sys_next::{av_dict_get, av_find_best_stream, avcodec_get_name, avformat_find_stream_info, AVCodecID, AVDictionary, AVDictionaryEntry, AVRational, AV_DICT_IGNORE_SUFFIX};
-
+use ffmpeg_sys_next::AVMediaType::{
+    AVMEDIA_TYPE_ATTACHMENT, AVMEDIA_TYPE_AUDIO, AVMEDIA_TYPE_DATA, AVMEDIA_TYPE_SUBTITLE,
+    AVMEDIA_TYPE_UNKNOWN, AVMEDIA_TYPE_VIDEO,
+};
+use ffmpeg_sys_next::{
+    av_dict_get, av_find_best_stream, avcodec_get_name, avformat_find_stream_info, AVCodecID,
+    AVDictionary, AVDictionaryEntry, AVRational, AV_DICT_IGNORE_SUFFIX,
+};
+use ffmpeg_sys_next::{avformat_alloc_context, avformat_close_input, avformat_open_input};
+use crate::core::context::AVFormatContextBox;
 use crate::error::{FindStreamError, OpenInputError, Result};
 
 #[derive(Debug, Clone)]
@@ -15,7 +21,6 @@ pub enum StreamInfo {
     /// Video stream information
     Video {
         // from AVStream
-
         /// The index of the stream within the media file.
         index: i32,
 
@@ -44,7 +49,6 @@ pub enum StreamInfo {
         avg_frame_rate: AVRational,
 
         // from AVCodecParameters
-
         /// The codec identifier (e.g., `AV_CODEC_ID_H264`) used to decode the video stream.
         codec_id: AVCodecID,
 
@@ -77,7 +81,6 @@ pub enum StreamInfo {
     /// Audio stream information
     Audio {
         // from AVStream
-
         /// The index of the audio stream within the media file.
         index: i32,
 
@@ -100,7 +103,6 @@ pub enum StreamInfo {
         avg_frame_rate: AVRational,
 
         // from AVCodecParameters
-
         /// The codec identifier used to decode the audio stream (e.g., `AV_CODEC_ID_AAC`).
         codec_id: AVCodecID,
 
@@ -129,7 +131,6 @@ pub enum StreamInfo {
     /// Subtitle stream information
     Subtitle {
         // from AVStream
-
         /// The index of the subtitle stream within the media file.
         index: i32,
 
@@ -149,7 +150,6 @@ pub enum StreamInfo {
         metadata: HashMap<String, String>,
 
         // from AVCodecParameters
-
         /// The codec identifier used to decode the subtitle stream (e.g., `AV_CODEC_ID_ASS`).
         codec_id: AVCodecID,
 
@@ -159,7 +159,6 @@ pub enum StreamInfo {
     /// Data stream information
     Data {
         // From AVStream
-
         /// The index of the data stream within the media file.
         index: i32,
 
@@ -178,7 +177,6 @@ pub enum StreamInfo {
     /// Attachment stream information
     Attachment {
         // From AVStream
-
         /// The index of the attachment stream within the media file.
         index: i32,
 
@@ -186,7 +184,6 @@ pub enum StreamInfo {
         metadata: HashMap<String, String>,
 
         // From AVCodecParameters
-
         /// The codec identifier used to decode the attachment stream (e.g., `AV_CODEC_ID_PNG` for images).
         codec_id: AVCodecID,
 
@@ -196,7 +193,6 @@ pub enum StreamInfo {
     // Unknown stream information
     Unknown {
         // From AVStream
-
         /// The index of the unknown stream within the media file.
         index: i32,
 
@@ -204,7 +200,6 @@ pub enum StreamInfo {
         metadata: HashMap<String, String>,
     },
 }
-
 
 impl StreamInfo {
     pub fn stream_type(&self) -> &'static str {
@@ -214,11 +209,10 @@ impl StreamInfo {
             StreamInfo::Subtitle { .. } => "Subtitle",
             StreamInfo::Data { .. } => "Data",
             StreamInfo::Attachment { .. } => "Attachment",
-            StreamInfo::Unknown { .. } => "Unknown"
+            StreamInfo::Unknown { .. } => "Unknown",
         }
     }
 }
-
 
 /// Retrieves video stream information from a given media URL.
 ///
@@ -235,33 +229,15 @@ impl StreamInfo {
 /// - `Ok(None)`: Returned if no video stream is found.
 /// - `Err`: If an error occurs during the operation (e.g., file cannot be opened or stream information cannot be found).
 pub fn find_video_stream_info(url: &str) -> Result<Option<StreamInfo>> {
-    let mut in_fmt_ctx = null_mut();
+    let mut in_fmt_ctx_box = init_format_context(url)?;
 
-    let url_cstr = CString::new(url)?;
     unsafe {
-        #[cfg(not(feature = "docs-rs"))]
-        let mut ret = {
-            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
-        };
-        #[cfg(feature = "docs-rs")]
-        let mut ret = 0;
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(OpenInputError::from(ret).into());
-        }
-
-        ret = avformat_find_stream_info(in_fmt_ctx, null_mut());
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(FindStreamError::from(ret).into());
-        }
-
-        let video_index = av_find_best_stream(in_fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, null_mut(), 0);
+        let video_index =
+            av_find_best_stream(in_fmt_ctx_box.fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, null_mut(), 0);
         if video_index < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
             return Ok(None);
         }
-        let streams = (*in_fmt_ctx).streams;
+        let streams = (*in_fmt_ctx_box.fmt_ctx).streams;
         let video_stream = *streams.offset(video_index as isize);
 
         let index = (*video_stream).index;
@@ -317,8 +293,6 @@ pub fn find_video_stream_info(url: &str) -> Result<Option<StreamInfo>> {
             rotate,
         };
 
-        avformat_close_input(&mut in_fmt_ctx);
-
         Ok(Some(video_stream_info))
     }
 }
@@ -338,33 +312,15 @@ pub fn find_video_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(None)`: Returned if no audio stream is found.
 /// - `Err`: If an error occurs during the operation (e.g., file cannot be opened or stream information cannot be found).
 pub fn find_audio_stream_info(url: &str) -> Result<Option<StreamInfo>> {
-    let mut in_fmt_ctx = null_mut();
+    let mut in_fmt_ctx_box = init_format_context(url)?;
 
-    let url_cstr = CString::new(url)?;
     unsafe {
-        #[cfg(not(feature = "docs-rs"))]
-        let mut ret = {
-            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
-        };
-        #[cfg(feature = "docs-rs")]
-        let mut ret = 0;
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(OpenInputError::from(ret).into());
-        }
-
-        ret = avformat_find_stream_info(in_fmt_ctx, null_mut());
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(FindStreamError::from(ret).into());
-        }
-
-        let audio_index = av_find_best_stream(in_fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, null_mut(), 0);
+        let audio_index =
+            av_find_best_stream(in_fmt_ctx_box.fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, null_mut(), 0);
         if audio_index < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
             return Ok(None);
         }
-        let streams = (*in_fmt_ctx).streams;
+        let streams = (*in_fmt_ctx_box.fmt_ctx).streams;
         let audio_stream = *streams.offset(audio_index as isize);
 
         let index = (*audio_stream).index;
@@ -409,8 +365,6 @@ pub fn find_audio_stream_info(url: &str) -> Result<Option<StreamInfo>> {
             frame_size,
         };
 
-        avformat_close_input(&mut in_fmt_ctx);
-
         Ok(Some(audio_stream_info))
     }
 }
@@ -431,34 +385,16 @@ pub fn find_audio_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(None)`: Returned if no subtitle stream is found.
 /// - `Err`: If an error occurs during the operation (e.g., file cannot be opened or stream information cannot be found).
 pub fn find_subtitle_stream_info(url: &str) -> Result<Option<StreamInfo>> {
-    let mut in_fmt_ctx = null_mut();
+    let mut in_fmt_ctx_box = init_format_context(url)?;
 
-    let url_cstr = CString::new(url)?;
     unsafe {
-        #[cfg(not(feature = "docs-rs"))]
-        let mut ret = {
-            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
-        };
-        #[cfg(feature = "docs-rs")]
-        let mut ret = 0;
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(OpenInputError::from(ret).into());
-        }
-
-        ret = avformat_find_stream_info(in_fmt_ctx, null_mut());
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(FindStreamError::from(ret).into());
-        }
-
-        let subtitle_index = av_find_best_stream(in_fmt_ctx, AVMEDIA_TYPE_SUBTITLE, -1, -1, null_mut(), 0);
+        let subtitle_index =
+            av_find_best_stream(in_fmt_ctx_box.fmt_ctx, AVMEDIA_TYPE_SUBTITLE, -1, -1, null_mut(), 0);
         if subtitle_index < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
             return Ok(None);
         }
 
-        let streams = (*in_fmt_ctx).streams;
+        let streams = (*in_fmt_ctx_box.fmt_ctx).streams;
         let subtitle_stream = *streams.offset(subtitle_index as isize);
 
         let index = (*subtitle_stream).index;
@@ -485,8 +421,6 @@ pub fn find_subtitle_stream_info(url: &str) -> Result<Option<StreamInfo>> {
             codec_name: codec_name.to_string(),
         };
 
-        avformat_close_input(&mut in_fmt_ctx);
-
         Ok(Some(subtitle_stream_info))
     }
 }
@@ -505,33 +439,15 @@ pub fn find_subtitle_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(None)`: Returned if no data stream is found.
 /// - `Err`: If an error occurs during the operation.
 pub fn find_data_stream_info(url: &str) -> Result<Option<StreamInfo>> {
-    let mut in_fmt_ctx = null_mut();
-    let url_cstr = CString::new(url)?;
+    let mut in_fmt_ctx_box = init_format_context(url)?;
+
     unsafe {
-        #[cfg(not(feature = "docs-rs"))]
-        let mut ret = {
-            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
-        };
-        #[cfg(feature = "docs-rs")]
-        let mut ret = 0;
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(OpenInputError::from(ret).into());
-        }
-
-        ret = avformat_find_stream_info(in_fmt_ctx, null_mut());
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(FindStreamError::from(ret).into());
-        }
-
-        let data_index = av_find_best_stream(in_fmt_ctx, AVMEDIA_TYPE_DATA, -1, -1, null_mut(), 0);
+        let data_index = av_find_best_stream(in_fmt_ctx_box.fmt_ctx, AVMEDIA_TYPE_DATA, -1, -1, null_mut(), 0);
         if data_index < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
             return Ok(None);
         }
 
-        let streams = (*in_fmt_ctx).streams;
+        let streams = (*in_fmt_ctx_box.fmt_ctx).streams;
         let data_stream = *streams.offset(data_index as isize);
 
         let index = (*data_stream).index;
@@ -539,8 +455,6 @@ pub fn find_data_stream_info(url: &str) -> Result<Option<StreamInfo>> {
         let start_time = (*data_stream).start_time;
         let duration = (*data_stream).duration;
         let metadata = av_dict_to_hashmap((*data_stream).metadata);
-
-        avformat_close_input(&mut in_fmt_ctx);
 
         Ok(Some(StreamInfo::Data {
             index,
@@ -567,33 +481,16 @@ pub fn find_data_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(None)`: Returned if no attachment stream is found.
 /// - `Err`: If an error occurs during the operation.
 pub fn find_attachment_stream_info(url: &str) -> Result<Option<StreamInfo>> {
-    let mut in_fmt_ctx = null_mut();
-    let url_cstr = CString::new(url)?;
+    let mut in_fmt_ctx_box = init_format_context(url)?;
+
     unsafe {
-        #[cfg(not(feature = "docs-rs"))]
-        let mut ret = {
-            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
-        };
-        #[cfg(feature = "docs-rs")]
-        let mut ret = 0;
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(OpenInputError::from(ret).into());
-        }
-
-        ret = avformat_find_stream_info(in_fmt_ctx, null_mut());
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(FindStreamError::from(ret).into());
-        }
-
-        let attachment_index = av_find_best_stream(in_fmt_ctx, AVMEDIA_TYPE_ATTACHMENT, -1, -1, null_mut(), 0);
+        let attachment_index =
+            av_find_best_stream(in_fmt_ctx_box.fmt_ctx, AVMEDIA_TYPE_ATTACHMENT, -1, -1, null_mut(), 0);
         if attachment_index < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
             return Ok(None);
         }
 
-        let streams = (*in_fmt_ctx).streams;
+        let streams = (*in_fmt_ctx_box.fmt_ctx).streams;
         let attachment_stream = *streams.offset(attachment_index as isize);
 
         let index = (*attachment_stream).index;
@@ -605,8 +502,6 @@ pub fn find_attachment_stream_info(url: &str) -> Result<Option<StreamInfo>> {
             .to_str()
             .unwrap_or("Unknown codec")
             .to_string();
-
-        avformat_close_input(&mut in_fmt_ctx);
 
         Ok(Some(StreamInfo::Attachment {
             index,
@@ -631,44 +526,22 @@ pub fn find_attachment_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(None)`: Returned if no unknown stream is found.
 /// - `Err`: If an error occurs during the operation.
 pub fn find_unknown_stream_info(url: &str) -> Result<Option<StreamInfo>> {
-    let mut in_fmt_ctx = null_mut();
-    let url_cstr = CString::new(url)?;
+    let mut in_fmt_ctx_box = init_format_context(url)?;
+
     unsafe {
-        #[cfg(not(feature = "docs-rs"))]
-        let mut ret = {
-            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
-        };
-        #[cfg(feature = "docs-rs")]
-        let mut ret = 0;
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(OpenInputError::from(ret).into());
-        }
-
-        ret = avformat_find_stream_info(in_fmt_ctx, null_mut());
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(FindStreamError::from(ret).into());
-        }
-
-        let unknown_index = av_find_best_stream(in_fmt_ctx, AVMEDIA_TYPE_UNKNOWN, -1, -1, null_mut(), 0);
+        let unknown_index =
+            av_find_best_stream(in_fmt_ctx_box.fmt_ctx, AVMEDIA_TYPE_UNKNOWN, -1, -1, null_mut(), 0);
         if unknown_index < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
             return Ok(None);
         }
 
-        let streams = (*in_fmt_ctx).streams;
+        let streams = (*in_fmt_ctx_box.fmt_ctx).streams;
         let unknown_stream = *streams.offset(unknown_index as isize);
 
         let index = (*unknown_stream).index;
         let metadata = av_dict_to_hashmap((*unknown_stream).metadata);
 
-        avformat_close_input(&mut in_fmt_ctx);
-
-        Ok(Some(StreamInfo::Unknown {
-            index,
-            metadata,
-        }))
+        Ok(Some(StreamInfo::Unknown { index, metadata }))
     }
 }
 
@@ -685,36 +558,22 @@ pub fn find_unknown_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// # Returns
 /// - `Ok(Vec<StreamInfo>)`: A vector containing information for all detected streams.
 /// - `Err`: If an error occurs during the operation (e.g., file cannot be opened or stream information cannot be found).
-pub fn find_all_stream_infos(url: &str) -> Result<Vec<StreamInfo>> {
-    let mut in_fmt_ctx = null_mut();
-    let url_cstr = CString::new(url)?;
+pub fn find_all_stream_infos(url: impl Into<String>) -> Result<Vec<StreamInfo>> {
+    let mut in_fmt_ctx_box = init_format_context(url)?;
+
     unsafe {
-        #[cfg(not(feature = "docs-rs"))]
-        let mut ret = {
-            avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), null_mut())
-        };
-        #[cfg(feature = "docs-rs")]
-        let mut ret = 0;
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(OpenInputError::from(ret).into());
-        }
-
-        ret = avformat_find_stream_info(in_fmt_ctx, null_mut());
-        if ret < 0 {
-            avformat_close_input(&mut in_fmt_ctx);
-            return Err(FindStreamError::from(ret).into());
-        }
-
         let mut stream_infos = Vec::new();
 
-        let stream_count = (*in_fmt_ctx).nb_streams;
+        let stream_count = (*in_fmt_ctx_box.fmt_ctx).nb_streams;
 
         for i in 0..stream_count {
-            let stream = *(*in_fmt_ctx).streams.add(i as usize);
+            let stream = *(*in_fmt_ctx_box.fmt_ctx).streams.add(i as usize);
             let codec_parameters = (*stream).codecpar;
             let codec_id = (*codec_parameters).codec_id;
-            let codec_name = CStr::from_ptr(avcodec_get_name(codec_id)).to_str().unwrap_or("Unknown codec").to_string();
+            let codec_name = CStr::from_ptr(avcodec_get_name(codec_id))
+                .to_str()
+                .unwrap_or("Unknown codec")
+                .to_string();
 
             let index = (*stream).index;
             let time_base = (*stream).time_base;
@@ -763,7 +622,7 @@ pub fn find_all_stream_infos(url: &str) -> Result<Vec<StreamInfo>> {
                         pixel_format,
                         video_delay,
                         fps,
-                        rotate
+                        rotate,
                     });
                 }
                 AVMEDIA_TYPE_AUDIO => {
@@ -826,18 +685,62 @@ pub fn find_all_stream_infos(url: &str) -> Result<Vec<StreamInfo>> {
                     });
                 }
                 AVMEDIA_TYPE_UNKNOWN => {
-                    stream_infos.push(StreamInfo::Unknown {
-                        index,
-                        metadata,
-                    });
+                    stream_infos.push(StreamInfo::Unknown { index, metadata });
                 }
                 _ => {}
             }
         }
 
-        avformat_close_input(&mut in_fmt_ctx);
-
         Ok(stream_infos)
+    }
+}
+
+fn init_format_context(url: impl Into<String>) -> Result<AVFormatContextBox> {
+    unsafe {
+        let mut in_fmt_ctx = avformat_alloc_context();
+        if in_fmt_ctx.is_null() {
+            return Err(OpenInputError::OutOfMemory.into());
+        }
+
+        let url_cstr = CString::new(url.into())?;
+
+        let mut format_opts = null_mut();
+        let scan_all_pmts_key = CString::new("scan_all_pmts")?;
+        if av_dict_get(
+            format_opts,
+            scan_all_pmts_key.as_ptr(),
+            null(),
+            ffmpeg_sys_next::AV_DICT_MATCH_CASE,
+        )
+        .is_null()
+        {
+            let scan_all_pmts_value = CString::new("1")?;
+            ffmpeg_sys_next::av_dict_set(
+                &mut format_opts,
+                scan_all_pmts_key.as_ptr(),
+                scan_all_pmts_value.as_ptr(),
+                ffmpeg_sys_next::AV_DICT_DONT_OVERWRITE,
+            );
+        };
+
+        #[cfg(not(feature = "docs-rs"))]
+        let mut ret =
+            { avformat_open_input(&mut in_fmt_ctx, url_cstr.as_ptr(), null(), &mut format_opts) };
+        #[cfg(feature = "docs-rs")]
+        let mut ret = 0;
+
+        if ret < 0 {
+            avformat_close_input(&mut in_fmt_ctx);
+            return Err(OpenInputError::from(ret).into());
+        }
+
+        ret = avformat_find_stream_info(in_fmt_ctx, null_mut());
+        if ret < 0 {
+            avformat_close_input(&mut in_fmt_ctx);
+            return Err(FindStreamError::from(ret).into());
+        }
+
+        Ok(AVFormatContextBox::new(in_fmt_ctx, true, false))
     }
 }
 
@@ -850,14 +753,15 @@ unsafe fn av_dict_to_hashmap(dict: *mut AVDictionary) -> HashMap<String, String>
         !entry.is_null()
     } {
         let key = CStr::from_ptr((*entry).key).to_string_lossy().into_owned();
-        let value = CStr::from_ptr((*entry).value).to_string_lossy().into_owned();
+        let value = CStr::from_ptr((*entry).value)
+            .to_string_lossy()
+            .into_owned();
 
         map.insert(key, value);
     }
 
     map
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -870,7 +774,10 @@ mod tests {
 
         let error = result.err().unwrap();
         println!("{error}");
-        assert!(matches!(error, crate::error::Error::OpenInputStream(OpenInputError::NotFound)))
+        assert!(matches!(
+            error,
+            crate::error::Error::OpenInputStream(OpenInputError::NotFound)
+        ))
     }
 
     #[test]
