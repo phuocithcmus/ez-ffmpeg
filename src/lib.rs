@@ -111,6 +111,7 @@ pub use self::core::filter;
 
 pub use ffmpeg_sys_next::AVRational;
 pub use ffmpeg_sys_next::AVMediaType;
+pub use ffmpeg_next::Frame;
 
 
 #[cfg(feature = "opengl")]
