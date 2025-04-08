@@ -31,11 +31,12 @@ pub struct FfmpegContextBuilder {
     inputs: Vec<Input>,
     filter_descs: Vec<FilterComplex>,
     outputs: Vec<Output>,
+    copy_ts: bool,
 }
 
 impl FfmpegContextBuilder {
 
-    /// Creates a new, empty `FfmpegContextBuilder`. Generally, you won’t call this
+    /// Creates a new, empty `FfmpegContextBuilder`. Generally, you won't call this
     /// directly; instead, use [`FfmpegContext::builder()`] as your entry point.
     ///
     /// # Example
@@ -49,6 +50,7 @@ impl FfmpegContextBuilder {
             inputs: vec![],
             filter_descs: vec![],
             outputs: vec![],
+            copy_ts: false,
         }
     }
 
@@ -217,12 +219,12 @@ impl FfmpegContextBuilder {
     /// that applies to one or more inputs. Each filter description can also
     /// contain complex filter graphs.
     ///
-    /// Internally, it’s converted into a [`FilterComplex`] object. These filters
+    /// Internally, it's converted into a [`FilterComplex`] object. These filters
     /// can further manipulate or route media streams before they reach the outputs.
     ///
     /// # Parameters
     /// - `filter_desc` - A string or [`FilterComplex`] describing filter operations
-    ///   in FFmpeg’s filter syntax.
+    ///   in FFmpeg's filter syntax.
     ///
     /// # Returns
     /// A modified `FfmpegContextBuilder`, allowing method chaining.
@@ -269,6 +271,22 @@ impl FfmpegContextBuilder {
         self
     }
 
+    /// Enables timestamp copying from input to output
+    /// 
+    /// This method sets the `copy_ts` flag to true, which is equivalent to FFmpeg's `-copyts` option.
+    /// When enabled, timestamps from the input stream are preserved in the output stream without modification.
+    /// This is useful when you want to maintain the original timing information from the source media.
+    /// 
+    /// # Example
+    /// ```
+    /// let builder = FfmpegContextBuilder::new()
+    ///     .copyts();
+    /// ```
+    pub fn copyts(mut self) -> Self {
+        self.copy_ts = true;
+        self
+    }
+
     /// Finalizes this builder, creating an [`FfmpegContext`] which can then be used
     /// to run FFmpeg jobs via [`FfmpegContext::start()`](FfmpegContext::start) or by constructing an
     /// [`FfmpegScheduler`](crate::FfmpegScheduler) yourself.
@@ -292,11 +310,12 @@ impl FfmpegContextBuilder {
     /// scheduler.wait().unwrap();
     /// ```
     pub fn build(self) -> crate::error::Result<FfmpegContext> {
-        FfmpegContext::new_with_independent_readrate(
+        FfmpegContext::new_with_options(
             self.independent_readrate,
             self.inputs,
             self.filter_descs,
             self.outputs,
+            self.copy_ts
         )
     }
 }

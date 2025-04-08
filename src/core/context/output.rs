@@ -193,7 +193,7 @@ pub struct Output {
     pub(crate) recording_time_us: Option<i64>,
     pub(crate) stop_time_us: Option<i64>,
     pub(crate) framerate: Option<AVRational>,
-    pub(crate) vsync_method: Option<VSyncMethod>,
+    pub(crate) vsync_method: VSyncMethod,
     pub(crate) bits_per_raw_sample: Option<i32>,
     pub(crate) audio_sample_rate: Option<i32>,
     pub(crate) audio_channels: Option<i32>,
@@ -764,7 +764,7 @@ impl Output {
     ///     .set_vsync_method(VSyncMethod::VsyncCfr);
     /// ```
     pub fn set_vsync_method(mut self, method: VSyncMethod) -> Self {
-        self.vsync_method = Some(method);
+        self.vsync_method = method;
         self
     }
 
@@ -1228,7 +1228,7 @@ impl From<Box<dyn FnMut(&[u8]) -> i32>> for Output {
             recording_time_us: None,
             stop_time_us: None,
             framerate: None,
-            vsync_method: None,
+            vsync_method: VSyncMethod::VsyncAuto,
             bits_per_raw_sample: None,
             audio_sample_rate: None,
             audio_channels: None,
@@ -1262,7 +1262,7 @@ impl From<String> for Output {
             recording_time_us: None,
             stop_time_us: None,
             framerate: None,
-            vsync_method: None,
+            vsync_method: VSyncMethod::VsyncAuto,
             bits_per_raw_sample: None,
             audio_sample_rate: None,
             audio_channels: None,

@@ -62,6 +62,7 @@ pub(crate) fn demux_init(
         return Ok(());
     }
 
+    let copy_ts = demux.copy_ts;
     let mut demux_paramter = DemuxerParamter::new(demux);
 
     let in_fmt_ctx = demux.in_fmt_ctx;
@@ -213,6 +214,7 @@ pub(crate) fn demux_init(
                         in_fmt_ctx_box.fmt_ctx,
                         packet.as_mut_ptr(),
                         &mut send_flags,
+                        copy_ts,
                     );
                     if ret < 0 {
                         break;
@@ -347,20 +349,19 @@ unsafe fn readrate_sleep(demux_paramter: &DemuxerParamter, nb_streams: c_uint, r
     }
 }
 
-//TODO copy_ts . default false
-const COPY_TS: bool = false;
 unsafe fn input_packet_process(
     demux_paramter: &mut DemuxerParamter,
     in_fmt_ctx: *mut AVFormatContext,
     pkt: *mut AVPacket,
     send_flags: &mut usize,
+    copy_ts: bool,
 ) -> c_int {
-    ts_fixup(demux_paramter, in_fmt_ctx, pkt);
+    ts_fixup(demux_paramter, in_fmt_ctx, pkt, copy_ts);
 
     if let Some(recording_time_us) = demux_paramter.recording_time_us.clone() {
         if recording_time_us != i64::MAX {
             let mut start_time = 0;
-            if COPY_TS {
+            if copy_ts {
                 start_time += demux_paramter.start_time_us.clone().unwrap_or(0);
             }
             let ds = demux_paramter
@@ -391,10 +392,11 @@ unsafe fn ts_fixup(
     demux_paramter: &mut DemuxerParamter,
     in_fmt_ctx: *mut AVFormatContext,
     pkt: *mut AVPacket,
+    copy_ts: bool,
 ) {
     let streams = (*in_fmt_ctx).streams;
     let ist = *streams.offset((*pkt).stream_index as isize);
-
+    let start_time = demux_paramter.start_time_effective;
     (*pkt).time_base = (*ist).time_base;
 
     {
@@ -404,11 +406,10 @@ unsafe fn ts_fixup(
             .unwrap();
 
         if !ds.wrap_correction_done
-            && demux_paramter.start_time_us.is_some()
+            && start_time != AV_NOPTS_VALUE
             && (*ist).pts_wrap_bits < 64
         {
-            let start_time_us = demux_paramter.start_time_us.unwrap_or(0);
-            let stime = av_rescale_q(start_time_us, AV_TIME_BASE_Q, (*pkt).time_base);
+            let stime = av_rescale_q(start_time, AV_TIME_BASE_Q, (*pkt).time_base);
             let stime2 = stime + (1u64 << (*ist).pts_wrap_bits) as i64;
             ds.wrap_correction_done = true;
 
@@ -493,7 +494,7 @@ unsafe fn ts_fixup(
     }
 
     // detect and try to correct for timestamp discontinuities
-    ts_discontinuity_process(demux_paramter, in_fmt_ctx, ist, pkt);
+    ts_discontinuity_process(demux_paramter, in_fmt_ctx, ist, pkt, copy_ts);
 
     // update estimated/predicted dts
     ist_dts_update(demux_paramter, ist, pkt);
@@ -598,6 +599,7 @@ unsafe fn ts_discontinuity_process(
     in_fmt_ctx: *mut AVFormatContext,
     ist: *mut AVStream,
     pkt: *mut AVPacket,
+    copy_ts: bool,
 ) {
     let offset = av_rescale_q(
         demux_paramter.ts_offset_discont,
@@ -619,7 +621,7 @@ unsafe fn ts_discontinuity_process(
         || (*(*ist).codecpar).codec_type == AVMEDIA_TYPE_AUDIO)
         && (*pkt).dts != AV_NOPTS_VALUE
     {
-        ts_discontinuity_detect(demux_paramter, in_fmt_ctx, ist, pkt);
+        ts_discontinuity_detect(demux_paramter, in_fmt_ctx, ist, pkt, copy_ts);
     }
 }
 
@@ -637,6 +639,7 @@ unsafe fn ts_discontinuity_detect(
     in_fmt_ctx: *mut AVFormatContext,
     ist: *mut AVStream,
     pkt: *mut AVPacket,
+    copy_ts: bool,
 ) {
     let ds = demux_paramter
         .demux_streams
@@ -645,7 +648,7 @@ unsafe fn ts_discontinuity_detect(
 
     let fmt_is_discont = (*(*in_fmt_ctx).iformat).flags & AVFMT_TS_DISCONT;
 
-    let mut disable_discontinuity_correction = COPY_TS;
+    let mut disable_discontinuity_correction = copy_ts;
     let pkt_dts = av_rescale_q_rnd(
         (*pkt).dts,
         (*pkt).time_base,
@@ -653,7 +656,7 @@ unsafe fn ts_discontinuity_detect(
         AV_ROUND_NEAR_INF,
     );
 
-    if COPY_TS && ds.next_dts != AV_NOPTS_VALUE && fmt_is_discont != 0 && (*ist).pts_wrap_bits < 60
+    if copy_ts && ds.next_dts != AV_NOPTS_VALUE && fmt_is_discont != 0 && (*ist).pts_wrap_bits < 60
     {
         let wrap_dts = av_rescale_q_rnd(
             (*pkt).dts + (1i64 << (*ist).pts_wrap_bits),
@@ -665,6 +668,7 @@ unsafe fn ts_discontinuity_detect(
             disable_discontinuity_correction = false;
         }
     }
+
     const DTS_DELTA_THRESHOLD: i64 = 10;
     if ds.next_dts != AV_NOPTS_VALUE && !disable_discontinuity_correction {
         let mut delta = pkt_dts - ds.next_dts;
@@ -710,7 +714,7 @@ unsafe fn ts_discontinuity_detect(
             }
         }
     } else if ds.next_dts == AV_NOPTS_VALUE
-        && !COPY_TS
+        && !copy_ts
         && fmt_is_discont != 0
         && (*demux_paramter).last_ts != AV_NOPTS_VALUE
     {
@@ -776,6 +780,7 @@ struct DemuxerParamter {
     ts_offset_discont: i64,
     last_ts: i64,
 
+    start_time_effective: i64,
     ts_offset: i64,
 
     readrate: Option<f32>,
@@ -825,6 +830,7 @@ impl DemuxerParamter {
             wallclock_start: 0,
             ts_offset_discont: 0,
             last_ts: 0,
+            start_time_effective: demux.start_time_effective,
             ts_offset: demux.ts_offset,
             readrate: demux.readrate,
             start_time_us: demux.start_time_us,

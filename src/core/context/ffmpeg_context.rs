@@ -112,20 +112,21 @@ impl FfmpegContext {
         filter_complexs: Vec<FilterComplex>,
         outputs: Vec<Output>,
     ) -> Result<FfmpegContext> {
-        Self::new_with_independent_readrate(false, inputs, filter_complexs, outputs)
+        Self::new_with_options(false, inputs, filter_complexs, outputs, false)
     }
 
-    pub(crate) fn new_with_independent_readrate(
+    pub(crate) fn new_with_options(
         mut independent_readrate: bool,
         mut inputs: Vec<Input>,
         filter_complexs: Vec<FilterComplex>,
         mut outputs: Vec<Output>,
+        copy_ts: bool,
     ) -> Result<FfmpegContext> {
         check_duplicate_inputs_outputs(&inputs, &outputs)?;
 
         crate::core::initialize_ffmpeg();
 
-        let mut demuxs = open_input_files(&mut inputs)?;
+        let mut demuxs = open_input_files(&mut inputs, copy_ts)?;
 
         if demuxs.len() <= 1 {
             independent_readrate = false;
@@ -139,9 +140,11 @@ impl FfmpegContext {
             Vec::new()
         };
 
-        let mut muxs = open_output_files(&mut outputs)?;
+        let mut muxs = open_output_files(&mut outputs, copy_ts)?;
 
         outputs_bind(&mut muxs, &mut filter_graphs, &mut demuxs)?;
+
+        correct_input_start_times(&mut demuxs, copy_ts);
 
         check_output_streams(&muxs)?;
 
@@ -155,6 +158,48 @@ impl FfmpegContext {
             filter_graphs,
             muxs,
         })
+    }
+}
+
+const START_AT_ZERO:bool = false;
+
+fn correct_input_start_times(demuxs: &mut Vec<Demuxer>, copy_ts: bool){
+    for (i, demux) in demuxs.iter_mut().enumerate() {
+        unsafe {
+            let is = demux.in_fmt_ctx;
+
+            demux.start_time_effective = (*is).start_time;
+            if (*is).start_time == ffmpeg_sys_next::AV_NOPTS_VALUE ||
+                (*(*is).iformat).flags & ffmpeg_sys_next::AVFMT_TS_DISCONT == 0 {
+                continue;
+            }
+
+            let mut new_start_time = i64::MAX;
+            let stream_count = (*is).nb_streams;
+            for j in 0..stream_count {
+                let st = *(*is).streams.add(j as usize);
+                if (*st).discard == ffmpeg_sys_next::AVDiscard::AVDISCARD_ALL || (*st).start_time == ffmpeg_sys_next::AV_NOPTS_VALUE {
+                    continue;
+                }
+                new_start_time = std::cmp::min(new_start_time, av_rescale_q((*st).start_time, (*st).time_base, ffmpeg_sys_next::AV_TIME_BASE_Q));
+            }
+            let diff = new_start_time - (*is).start_time;
+            if diff != 0 {
+                debug!("Correcting start time of Input #{i} by {diff}us.");
+                demux.start_time_effective = new_start_time;
+                if copy_ts && START_AT_ZERO {
+                    demux.ts_offset = -new_start_time;
+                }else if !copy_ts {
+                    let abs_start_seek = (*is).start_time + demux.start_time_us.unwrap_or(0);
+                    demux.ts_offset = if abs_start_seek > new_start_time { -abs_start_seek } else { -new_start_time };
+                } else if copy_ts {
+                    demux.ts_offset = 0;
+                }
+
+                // demux.ts_offset += demux.input_ts_offset;
+            }
+
+        }
     }
 }
 
@@ -1186,12 +1231,12 @@ fn check_duplicate_inputs_outputs(inputs: &[Input], outputs: &[Output]) -> Resul
     Ok(())
 }
 
-fn open_output_files(outputs: &mut Vec<Output>) -> Result<Vec<Muxer>> {
+fn open_output_files(outputs: &mut Vec<Output>, copy_ts: bool) -> Result<Vec<Muxer>> {
     let mut muxs = Vec::new();
 
     for (i, output) in outputs.iter_mut().enumerate() {
         unsafe {
-            let result = open_output_file(i, output);
+            let result = open_output_file(i, output, copy_ts);
             if let Err(e) = result {
                 free_output_av_format_context(muxs);
                 return Err(e);
@@ -1215,7 +1260,7 @@ unsafe fn open_output_file(index: usize, output: &mut Output) -> Result<Muxer> {
 }
 
 #[cfg(not(feature = "docs-rs"))]
-unsafe fn open_output_file(index: usize, output: &mut Output) -> Result<Muxer> {
+unsafe fn open_output_file(index: usize, output: &mut Output, copy_ts: bool) -> Result<Muxer> {
     let mut out_fmt_ctx = null_mut();
     let format = get_format(&output.format)?;
     match &output.url {
@@ -1350,6 +1395,7 @@ unsafe fn open_output_file(index: usize, output: &mut Output) -> Result<Muxer> {
         audio_codec_opts,
         subtitle_codec_opts,
         format_opts,
+        copy_ts
     );
 
     Ok(mux)
@@ -1739,8 +1785,21 @@ fn ifilter_bind_ist(
         //TODO Set this flag according to the input stream parameters
         input_filter.opts.flags |= IFILTER_FLAG_AUTOROTATE;
 
-        if demux.start_time_us.is_some() {
-            input_filter.opts.trim_start_us = Some(0);
+        let tsoffset = if demux.copy_ts {
+            let mut tsoffset = if demux.start_time_us.is_some() {
+                demux.start_time_us.unwrap()
+            } else {
+                0
+            };
+            if (*demux.in_fmt_ctx).start_time != ffmpeg_sys_next::AV_NOPTS_VALUE {
+                tsoffset += (*demux.in_fmt_ctx).start_time
+            }
+            tsoffset
+        } else {
+            0
+        };
+        if (*demux.in_fmt_ctx).start_time != ffmpeg_sys_next::AV_NOPTS_VALUE {
+            input_filter.opts.trim_start_us = Some(tsoffset);
         }
         input_filter.opts.trim_end_us = demux.recording_time_us;
 
@@ -2062,11 +2121,11 @@ unsafe fn describe_filter_link(
     Ok(name)
 }
 
-fn open_input_files(inputs: &mut Vec<Input>) -> Result<Vec<Demuxer>> {
+fn open_input_files(inputs: &mut Vec<Input>, copy_ts: bool) -> Result<Vec<Demuxer>> {
     let mut demuxs = Vec::new();
     for (i, input) in inputs.iter_mut().enumerate() {
         unsafe {
-            let result = open_input_file(i, input);
+            let result = open_input_file(i, input, copy_ts);
             if let Err(e) = result {
                 free_input_av_format_context(demuxs);
                 return Err(e);
@@ -2096,6 +2155,7 @@ unsafe fn open_input_file(
 unsafe fn open_input_file(
     index: usize,
     input: &mut Input,
+    copy_ts: bool
 ) -> Result<Demuxer> {
     let mut in_fmt_ctx = avformat_alloc_context();
     if in_fmt_ctx.is_null() {
@@ -2265,7 +2325,7 @@ unsafe fn open_input_file(
         url,
         input.url.is_none(),
         in_fmt_ctx,
-        0 - timestamp,
+        0 - if copy_ts { 0 } else { timestamp },
         input.frame_pipelines.take(),
         input.video_codec.clone(),
         input.audio_codec.clone(),
@@ -2278,6 +2338,7 @@ unsafe fn open_input_file(
         input.hwaccel.clone(),
         input.hwaccel_device.clone(),
         input.hwaccel_output_format.clone(),
+        copy_ts
     )?;
 
     Ok(demux)
@@ -2471,25 +2532,25 @@ mod tests {
             .filter_level(log::LevelFilter::Debug)
             .is_test(true)
             .try_init();
-        let ffmpeg_context = FfmpegContext::new(
+        let _ffmpeg_context = FfmpegContext::new(
             vec!["test.mp4".to_string().into()],
             vec!["hue=s=0".to_string().into()],
             vec!["output.mp4".to_string().into()],
         )
         .unwrap();
-        let ffmpeg_context = FfmpegContext::new(
+        let _ffmpeg_context = FfmpegContext::new(
             vec!["test.mp4".into()],
             vec!["[0:v]hue=s=0".into()],
             vec!["output.mp4".to_string().into()],
         )
         .unwrap();
-        let ffmpeg_context = FfmpegContext::new(
+        let _ffmpeg_context = FfmpegContext::new(
             vec!["test.mp4".into()],
             vec!["hue=s=0[my-out]".into()],
             vec![Output::from("output.mp4").add_stream_map("my-out")],
         )
         .unwrap();
-        let ffmpeg_context = FfmpegContext::new(
+        let _ffmpeg_context = FfmpegContext::new(
             vec!["test.mp4".into()],
             vec!["hue=s=0".into()],
             vec![Output::from("output.mp4").add_stream_map_with_copy("0:v?")],

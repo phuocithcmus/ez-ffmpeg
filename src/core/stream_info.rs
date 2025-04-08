@@ -229,7 +229,7 @@ impl StreamInfo {
 /// - `Ok(None)`: Returned if no video stream is found.
 /// - `Err`: If an error occurs during the operation (e.g., file cannot be opened or stream information cannot be found).
 pub fn find_video_stream_info(url: &str) -> Result<Option<StreamInfo>> {
-    let mut in_fmt_ctx_box = init_format_context(url)?;
+    let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {
         let video_index =
@@ -312,7 +312,7 @@ pub fn find_video_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(None)`: Returned if no audio stream is found.
 /// - `Err`: If an error occurs during the operation (e.g., file cannot be opened or stream information cannot be found).
 pub fn find_audio_stream_info(url: &str) -> Result<Option<StreamInfo>> {
-    let mut in_fmt_ctx_box = init_format_context(url)?;
+    let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {
         let audio_index =
@@ -385,7 +385,7 @@ pub fn find_audio_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(None)`: Returned if no subtitle stream is found.
 /// - `Err`: If an error occurs during the operation (e.g., file cannot be opened or stream information cannot be found).
 pub fn find_subtitle_stream_info(url: &str) -> Result<Option<StreamInfo>> {
-    let mut in_fmt_ctx_box = init_format_context(url)?;
+    let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {
         let subtitle_index =
@@ -439,7 +439,7 @@ pub fn find_subtitle_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(None)`: Returned if no data stream is found.
 /// - `Err`: If an error occurs during the operation.
 pub fn find_data_stream_info(url: &str) -> Result<Option<StreamInfo>> {
-    let mut in_fmt_ctx_box = init_format_context(url)?;
+    let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {
         let data_index = av_find_best_stream(in_fmt_ctx_box.fmt_ctx, AVMEDIA_TYPE_DATA, -1, -1, null_mut(), 0);
@@ -481,7 +481,7 @@ pub fn find_data_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(None)`: Returned if no attachment stream is found.
 /// - `Err`: If an error occurs during the operation.
 pub fn find_attachment_stream_info(url: &str) -> Result<Option<StreamInfo>> {
-    let mut in_fmt_ctx_box = init_format_context(url)?;
+    let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {
         let attachment_index =
@@ -526,7 +526,7 @@ pub fn find_attachment_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(None)`: Returned if no unknown stream is found.
 /// - `Err`: If an error occurs during the operation.
 pub fn find_unknown_stream_info(url: &str) -> Result<Option<StreamInfo>> {
-    let mut in_fmt_ctx_box = init_format_context(url)?;
+    let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {
         let unknown_index =
@@ -559,7 +559,7 @@ pub fn find_unknown_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(Vec<StreamInfo>)`: A vector containing information for all detected streams.
 /// - `Err`: If an error occurs during the operation (e.g., file cannot be opened or stream information cannot be found).
 pub fn find_all_stream_infos(url: impl Into<String>) -> Result<Vec<StreamInfo>> {
-    let mut in_fmt_ctx_box = init_format_context(url)?;
+    let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {
         let mut stream_infos = Vec::new();

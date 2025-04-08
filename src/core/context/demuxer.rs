@@ -35,9 +35,12 @@ pub(crate) struct Demuxer {
     pub(crate) recording_time_us: Option<i64>,
     pub(crate) exit_on_error: Option<bool>,
     pub(crate) stream_loop: Option<i32>,
+    pub(crate) copy_ts: bool,
 
     #[cfg(windows)]
     pub(crate) hwaccel: Option<String>,
+
+    pub(crate) start_time_effective: i64,
 
     pub(crate) node: Arc<SchNode>,
     streams: Vec<DecoderStream>,
@@ -65,6 +68,7 @@ impl Demuxer {
         hwaccel: Option<String>,
         hwaccel_device: Option<String>,
         hwaccel_output_format: Option<String>,
+        copy_ts: bool,
     ) -> crate::error::Result<Self> {
         let streams = Self::init_streams(
             in_fmt_ctx,
@@ -87,11 +91,13 @@ impl Demuxer {
             recording_time_us,
             exit_on_error,
             stream_loop,
+            copy_ts,
             #[cfg(windows)]
             hwaccel,
             node: Arc::new(SchNode::Demux { waiter: Arc::new(Default::default()), task_exited: Arc::new(Default::default()) }),
             streams,
             dsts: vec![],
+            start_time_effective: 0,
         })
     }
 

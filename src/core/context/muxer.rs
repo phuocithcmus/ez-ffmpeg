@@ -27,7 +27,7 @@ pub(crate) struct Muxer {
     pub(crate) start_time_us: Option<i64>,
     pub(crate) recording_time_us: Option<i64>,
     pub(crate) framerate: Option<AVRational>,
-    pub(crate) vsync_method: Option<VSyncMethod>,
+    pub(crate) vsync_method: VSyncMethod,
     pub(crate) bits_per_raw_sample: Option<i32>,
     pub(crate) audio_sample_rate: Option<i32>,
     pub(crate) audio_channels: Option<i32>,
@@ -45,6 +45,8 @@ pub(crate) struct Muxer {
     pub(crate) audio_codec_opts: Option<HashMap<CString, CString>>,
     pub(crate) subtitle_codec_opts: Option<HashMap<CString, CString>>,
     pub(crate) format_opts: Option<HashMap<CString, CString>>,
+
+    pub(crate) copy_ts: bool,
 
     streams: Vec<EncoderStream>,
     queue: Option<(Sender<PacketBox>, Receiver<PacketBox>)>,
@@ -73,7 +75,7 @@ impl Muxer {
         start_time_us: Option<i64>,
         recording_time_us: Option<i64>,
         framerate: Option<AVRational>,
-        vsync_method: Option<VSyncMethod>,
+        vsync_method: VSyncMethod,
         bits_per_raw_sample: Option<i32>,
         audio_sample_rate: Option<i32>,
         audio_channels: Option<i32>,
@@ -87,6 +89,7 @@ impl Muxer {
         audio_codec_opts: Option<HashMap<CString, CString>>,
         subtitle_codec_opts: Option<HashMap<CString, CString>>,
         format_opts: Option<HashMap<CString, CString>>,
+        copy_ts: bool
     ) -> Self {
         Self {
             url,
@@ -114,6 +117,7 @@ impl Muxer {
             audio_codec_opts,
             subtitle_codec_opts,
             format_opts,
+            copy_ts,
             streams: vec![],
             queue: None,
             src_pre_receivers: vec![],
@@ -136,7 +140,7 @@ impl Muxer {
 
         let vsync_method = if media_type == AVMediaType::AVMEDIA_TYPE_VIDEO {
             Some(unsafe {
-                determine_vsync_method(self.vsync_method.clone(), self.framerate, self.out_fmt_ctx)
+                determine_vsync_method(self.vsync_method, self.framerate, self.out_fmt_ctx, self.copy_ts)
             })
         } else {
             None
@@ -241,17 +245,17 @@ impl Muxer {
 }
 
 unsafe fn determine_vsync_method(
-    vsync_method: Option<VSyncMethod>,
+    vsync_method: VSyncMethod,
     framerate: Option<AVRational>,
     out_fmt_ctx: *mut AVFormatContext,
+    copy_ts: bool,
 ) -> VSyncMethod {
-    let vsync_method = vsync_method.unwrap_or_else(|| VSyncMethod::VsyncAuto);
     if vsync_method != VSyncMethod::VsyncAuto {
         return vsync_method;
     }
 
     // 1. Check if frame rate is set
-    if framerate.map_or(false, |fr| fr.num != 0) {
+    let mut vsync_method = if framerate.map_or(false, |fr| fr.num != 0) {
         VSyncMethod::VsyncCfr
     }
     // 2. If output format is "avi", set VSYNC_VFR
@@ -273,9 +277,13 @@ unsafe fn determine_vsync_method(
         } else {
             VSyncMethod::VsyncCfr
         }
+    };
+
+    // 4. If input stream exists and VSYNC_CFR is selected, check additional conditions
+    if vsync_method == VSyncMethod::VsyncCfr && copy_ts {
+        vsync_method = VSyncMethod::VsyncVscfr;
     }
 
-    // TODO 4. If input stream exists and VSYNC_CFR is selected, check additional conditions
-
+    vsync_method
     // TODO 5. If VSYNC_CFR and copy_ts is true, change to VSYNC_VSCFR
 }
