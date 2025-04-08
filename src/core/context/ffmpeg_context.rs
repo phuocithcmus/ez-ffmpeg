@@ -2232,10 +2232,6 @@ unsafe fn open_input_file(
     /* if seeking requested, we execute it */
     if let Some(start_time_us) = input.start_time_us {
         let mut seek_timestamp = timestamp;
-        /* add the stream start time */
-        if (*in_fmt_ctx).start_time != ffmpeg_sys_next::AV_NOPTS_VALUE {
-            seek_timestamp += (*in_fmt_ctx).start_time;
-        }
 
         if (*(*in_fmt_ctx).iformat).flags & ffmpeg_sys_next::AVFMT_SEEK_TO_PTS == 0 {
             let mut dts_heuristic = false;
