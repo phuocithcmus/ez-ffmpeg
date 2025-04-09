@@ -362,7 +362,7 @@ fn send_frame(
     tmp_frame: Option<Frame>,
 ) -> crate::error::Result<()> {
     if let Some(frame) = tmp_frame {
-        let frame_box = FrameBox {
+        let mut frame_box = FrameBox {
             frame,
             frame_data: FrameData {
                 framerate: None,
@@ -417,6 +417,7 @@ fn send_frame(
                     continue;
                 }
             } else {
+                frame_box.frame_data.fg_input_index = *fg_input_index;
                 if let Err(_) = sender.send(frame_box) {
                     debug!("Pipeline [index:{}] send frame failed, destination already finished",
                         pipeline.stream_index.unwrap_or(usize::MAX)
