@@ -228,7 +228,7 @@ impl StreamInfo {
 /// - `Ok(Some(StreamInfo::Video))`: Contains the video stream information if found.
 /// - `Ok(None)`: Returned if no video stream is found.
 /// - `Err`: If an error occurs during the operation (e.g., file cannot be opened or stream information cannot be found).
-pub fn find_video_stream_info(url: &str) -> Result<Option<StreamInfo>> {
+pub fn find_video_stream_info(url: impl Into<String>) -> Result<Option<StreamInfo>> {
     let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {
@@ -311,7 +311,7 @@ pub fn find_video_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(Some(StreamInfo::Audio))`: Contains the audio stream information if found.
 /// - `Ok(None)`: Returned if no audio stream is found.
 /// - `Err`: If an error occurs during the operation (e.g., file cannot be opened or stream information cannot be found).
-pub fn find_audio_stream_info(url: &str) -> Result<Option<StreamInfo>> {
+pub fn find_audio_stream_info(url: impl Into<String>) -> Result<Option<StreamInfo>> {
     let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {
@@ -384,7 +384,7 @@ pub fn find_audio_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(Some(StreamInfo::Subtitle))`: Contains the subtitle stream information if found.
 /// - `Ok(None)`: Returned if no subtitle stream is found.
 /// - `Err`: If an error occurs during the operation (e.g., file cannot be opened or stream information cannot be found).
-pub fn find_subtitle_stream_info(url: &str) -> Result<Option<StreamInfo>> {
+pub fn find_subtitle_stream_info(url: impl Into<String>) -> Result<Option<StreamInfo>> {
     let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {
@@ -438,7 +438,7 @@ pub fn find_subtitle_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(Some(StreamInfo::Data))`: Contains the data stream information if found.
 /// - `Ok(None)`: Returned if no data stream is found.
 /// - `Err`: If an error occurs during the operation.
-pub fn find_data_stream_info(url: &str) -> Result<Option<StreamInfo>> {
+pub fn find_data_stream_info(url: impl Into<String>) -> Result<Option<StreamInfo>> {
     let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {
@@ -480,7 +480,7 @@ pub fn find_data_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(Some(StreamInfo::Attachment))`: Contains the attachment stream information if found.
 /// - `Ok(None)`: Returned if no attachment stream is found.
 /// - `Err`: If an error occurs during the operation.
-pub fn find_attachment_stream_info(url: &str) -> Result<Option<StreamInfo>> {
+pub fn find_attachment_stream_info(url: impl Into<String>) -> Result<Option<StreamInfo>> {
     let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {
@@ -525,7 +525,7 @@ pub fn find_attachment_stream_info(url: &str) -> Result<Option<StreamInfo>> {
 /// - `Ok(Some(StreamInfo::Unknown))`: Contains the unknown stream information if found.
 /// - `Ok(None)`: Returned if no unknown stream is found.
 /// - `Err`: If an error occurs during the operation.
-pub fn find_unknown_stream_info(url: &str) -> Result<Option<StreamInfo>> {
+pub fn find_unknown_stream_info(url: impl Into<String>) -> Result<Option<StreamInfo>> {
     let in_fmt_ctx_box = init_format_context(url)?;
 
     unsafe {

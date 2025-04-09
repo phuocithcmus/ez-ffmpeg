@@ -14,9 +14,9 @@ use ffmpeg_next::format;
 /// let duration = get_duration_us("video.mp4").unwrap();
 /// println!("Duration: {} us", duration);
 /// ```
-pub fn get_duration_us(input: &str) -> Result<i64, ffmpeg_next::Error> {
+pub fn get_duration_us(input: impl Into<String>) -> Result<i64, ffmpeg_next::Error> {
     // Open the media file using `format::input` and get the `FormatContext`
-    let format_context = format::input(input)?;
+    let format_context = format::input(&input.into())?;
 
     // Get the duration of the media file in microseconds
     let duration = format_context.duration();
@@ -39,9 +39,9 @@ pub fn get_duration_us(input: &str) -> Result<i64, ffmpeg_next::Error> {
 /// let format = get_format("video.mp4").unwrap();
 /// println!("Format: {}", format);
 /// ```
-pub fn get_format(input: &str) -> Result<String, ffmpeg_next::Error> {
+pub fn get_format(input: impl Into<String>) -> Result<String, ffmpeg_next::Error> {
     // Open the media file using `format::input` and get the `FormatContext`
-    let format_context = format::input(input)?;
+    let format_context = format::input(&input.into())?;
 
     // Get the format name of the media file and return it as a string
     Ok(format_context.format().name().to_string())
@@ -64,9 +64,9 @@ pub fn get_format(input: &str) -> Result<String, ffmpeg_next::Error> {
 ///     println!("{}: {}", key, value);
 /// }
 /// ```
-pub fn get_metadata(input: &str) -> Result<Vec<(String, String)>, ffmpeg_next::Error> {
+pub fn get_metadata(input: impl Into<String>) -> Result<Vec<(String, String)>, ffmpeg_next::Error> {
     // Open the media file using `format::input` and get the `FormatContext`
-    let format_context = format::input(input)?;
+    let format_context = format::input(&input.into())?;
 
     // Get the metadata and convert it to a vector of key-value pairs
     Ok(format_context
