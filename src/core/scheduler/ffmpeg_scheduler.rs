@@ -546,6 +546,28 @@ mod tests {
     use crate::filter::frame_pipeline_builder::FramePipelineBuilder;
 
     #[test]
+    fn test_copy() {
+        let _ = env_logger::builder()
+            .filter_level(log::LevelFilter::Trace)
+            .is_test(true)
+            .try_init();
+
+        let result = FfmpegContext::builder()
+            .input("test.mp4")
+            .output( Output::from("output.mp4")
+                .add_stream_map_with_copy("0:v")
+                .add_stream_map_with_copy("0:a")
+            )
+            .build()
+            .unwrap()
+            .start()
+            .unwrap()
+            .wait();
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn test_concat() {
         let _ = env_logger::builder()
             .filter_level(log::LevelFilter::Trace)

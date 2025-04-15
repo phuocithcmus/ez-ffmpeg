@@ -1062,6 +1062,7 @@ unsafe fn demux_stream_send_to_dst(
     }
 
     if let Some(output_stream_index) = output_stream_index {
+        (*packet_box.packet.as_mut_ptr()).stream_index = *output_stream_index as i32;
         packet_box.packet_data.output_stream_index = *output_stream_index as i32;
         packet_box.packet_data.is_copy = true;
     }
