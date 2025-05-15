@@ -21,8 +21,9 @@ repository = "https://github.com/YeautyYE/ez-ffmpeg"
 [dependencies]
 log = "0.4"
 thiserror = "1.0"
-ffmpeg-next = "7.1.0"
+ffmpeg = { package = "ffmpeg-next", git = "https://github.com/CapSoftware/rust-ffmpeg", rev = "49db1fede112" }
 ffmpeg-sys-next = "7.1.0"
+ffmpeg-next = { version= "7.1.0",features = ["static"] }
 crossbeam = "0.8.4"
 crossbeam-channel = "0.5.13"
 libc = "0.2.159"
@@ -51,7 +52,6 @@ async = []
 opengl = ["dep:surfman", "dep:glow", "dep:bytemuck"]
 rtmp = ["dep:rml_rtmp", "dep:slab", "dep:dashmap", "flv"]
 flv = ["dep:bytes", "dep:byteorder"]
-static = ["ffmpeg-next/static"]
 docs-rs = ["async", "opengl", "rtmp", "flv"]
 
 [package.metadata.docs.rs]
